@@ -33,6 +33,9 @@ inline Canvas g_xamlCanvas = nullptr;
 inline MenuFlyout g_xamlMenu = nullptr;
 inline Flyout g_deviceFlyout = nullptr;
 inline StackPanel g_deviceListPanel = nullptr;
+inline TextBlock g_panelBadgeText = nullptr;
+inline Button g_panelDisconnectAllBtn = nullptr;
+inline winrt::Windows::Foundation::Collections::IVectorView<DeviceInformation> g_cachedDevices = nullptr;
 inline FocusState g_menuFocusState = FocusState::Unfocused;
 
 inline std::unordered_map<std::wstring, ConnectedDeviceInfo> g_audioPlaybackConnections;
@@ -82,6 +85,8 @@ void UpdateAudioThreadPriority(bool enable);
 void UpdatePowerLock(bool hasConnections);
 void SetupDeviceWatcher(bool enable);
 void ShowDevicePanel();
+void UpdateHeaderBadgeUI();
+void UpdateDevicePanelUI();
 void SetDeviceVolume(std::wstring_view deviceId, float volume);
 float GetDeviceVolume(std::wstring_view deviceId);
 void ExitApp();
