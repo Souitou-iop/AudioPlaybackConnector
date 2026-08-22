@@ -49,16 +49,10 @@ jobs:
     - name: Restore NuGet packages
       run: nuget restore AudioPlaybackConnector.sln
 
-    - name: Build Main Architectures (x64, x86, ARM64)
+    - name: Build x64 and ARM64
       run: |
         msbuild AudioPlaybackConnector.sln -p:Configuration=Release -p:Platform=x64 -m
-        msbuild AudioPlaybackConnector.sln -p:Configuration=Release -p:Platform=x86 -m
         msbuild AudioPlaybackConnector.sln -p:Configuration=Release -p:Platform=ARM64 -m
-      shell: cmd
-
-    - name: Build Legacy ARM (optional)
-      run: msbuild AudioPlaybackConnector.sln -p:Configuration=Release -p:Platform=ARM -m
-      continue-on-error: true
       shell: cmd
 
     - name: Upload Build Artifacts
@@ -68,8 +62,6 @@ jobs:
         path: |
           x64/Release/AudioPlaybackConnector64.exe
           x64/Release/AudioPlaybackConnector64.pdb
-          Release/AudioPlaybackConnector32.exe
-          Release/AudioPlaybackConnector32.pdb
           ARM64/Release/AudioPlaybackConnectorARM64.exe
           ARM64/Release/AudioPlaybackConnectorARM64.pdb
         if-no-files-found: ignore
@@ -86,5 +78,4 @@ jobs:
         generate_release_notes: true
         files: |
           x64/Release/AudioPlaybackConnector64.exe
-          Release/AudioPlaybackConnector32.exe
           ARM64/Release/AudioPlaybackConnectorARM64.exe
