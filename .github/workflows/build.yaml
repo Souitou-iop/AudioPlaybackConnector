@@ -1,116 +1,89 @@
-name: Build
+name: Build and Release
 
 on:
   push:
-    tags: [ '**' ]
+    tags:
+      - 'v*'
+      - '**'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag Name (e.g., v1.0-beta)'
+        required: false
+        default: 'v1.0-beta'
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v2
+    - name: Checkout repository
+      uses: actions/checkout@v4
       with:
         submodules: true
-    - name: Add msbuild to PATH
-      uses: microsoft/setup-msbuild@v1.0.0
-    - uses: nuget/setup-nuget@v1
+        fetch-depth: 0
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Setup NuGet
+      uses: nuget/setup-nuget@v2
       with:
         nuget-version: latest
-    - uses: actions/setup-python@v1
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
       with:
-        python-version: 3.7
-    - run: |
+        python-version: '3.10'
+
+    - name: Generate translation resources
+      run: |
         cd translate
         pip install -r requirements.txt
+        python ./po2ymo.py ./source/zh_CN.po ./generated/zh_CN.ymo
+        python ./po2ymo.py ./source/zh_TW.po ./generated/zh_TW.ymo
         ./gen_rc.sh
       shell: bash
-    - run: nuget restore AudioPlaybackConnector.sln
-    - run: |
-        Start-Job -Init ([ScriptBlock]::Create("Set-Location '$pwd'")) -Script {
-          msbuild AudioPlaybackConnector.sln "-p:Configuration=Release;Platform=x64" }
-        Start-Job -Init ([ScriptBlock]::Create("Set-Location '$pwd'")) -Script {
-          msbuild AudioPlaybackConnector.sln "-p:Configuration=Release;Platform=x86" }
-        Start-Job -Init ([ScriptBlock]::Create("Set-Location '$pwd'")) -Script {
-          msbuild AudioPlaybackConnector.sln "-p:Configuration=Release;Platform=ARM64" }
-        Start-Job -Init ([ScriptBlock]::Create("Set-Location '$pwd'")) -Script {
-          msbuild AudioPlaybackConnector.sln "-p:Configuration=Release;Platform=ARM" }
-        Get-Job | Wait-Job | Receive-Job
-      shell: powershell
-    - uses: actions/upload-artifact@v2
+
+    - name: Restore NuGet packages
+      run: nuget restore AudioPlaybackConnector.sln
+
+    - name: Build All Architectures
+      run: |
+        msbuild AudioPlaybackConnector.sln -p:Configuration=Release -p:Platform=x64 -m
+        msbuild AudioPlaybackConnector.sln -p:Configuration=Release -p:Platform=x86 -m
+        msbuild AudioPlaybackConnector.sln -p:Configuration=Release -p:Platform=ARM64 -m
+        msbuild AudioPlaybackConnector.sln -p:Configuration=Release -p:Platform=ARM -m
+      shell: cmd
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
       with:
-        name: AudioPlaybackConnector64
-        path: x64/Release/AudioPlaybackConnector64.exe
-    - uses: actions/upload-artifact@v2
-      with:
-        name: AudioPlaybackConnector64
-        path: x64/Release/AudioPlaybackConnector64.pdb
-    - uses: actions/upload-artifact@v2
-      with:
-        name: AudioPlaybackConnector32
-        path: Release/AudioPlaybackConnector32.exe
-    - uses: actions/upload-artifact@v2
-      with:
-        name: AudioPlaybackConnector32
-        path: Release/AudioPlaybackConnector32.pdb
-    - uses: actions/upload-artifact@v2
-      with:
-        name: AudioPlaybackConnectorARM64
-        path: ARM64/Release/AudioPlaybackConnectorARM64.exe
-    - uses: actions/upload-artifact@v2
-      with:
-        name: AudioPlaybackConnectorARM64
-        path: ARM64/Release/AudioPlaybackConnectorARM64.pdb
-    - uses: actions/upload-artifact@v2
-      with:
-        name: AudioPlaybackConnectorARM
-        path: ARM/Release/AudioPlaybackConnectorARM.exe
-    - uses: actions/upload-artifact@v2
-      with:
-        name: AudioPlaybackConnectorARM
-        path: ARM/Release/AudioPlaybackConnectorARM.pdb
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
+        name: AudioPlaybackConnector-Binaries
+        path: |
+          x64/Release/AudioPlaybackConnector64.exe
+          x64/Release/AudioPlaybackConnector64.pdb
+          Release/AudioPlaybackConnector32.exe
+          Release/AudioPlaybackConnector32.pdb
+          ARM64/Release/AudioPlaybackConnectorARM64.exe
+          ARM64/Release/AudioPlaybackConnectorARM64.pdb
+          ARM/Release/AudioPlaybackConnectorARM.exe
+          ARM/Release/AudioPlaybackConnectorARM.pdb
+
+    - name: Publish GitHub Release
+      uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ github.ref }}
-        release_name: ${{ github.ref }}
-        draft: true
+        tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+        name: AudioPlaybackConnector ${{ github.event.inputs.tag_name || github.ref_name }}
+        draft: false
         prerelease: false
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: x64/Release/AudioPlaybackConnector64.exe
-        asset_name: AudioPlaybackConnector64.exe
-        asset_content_type: application/octet-stream
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: Release/AudioPlaybackConnector32.exe
-        asset_name: AudioPlaybackConnector32.exe
-        asset_content_type: application/octet-stream
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ARM64/Release/AudioPlaybackConnectorARM64.exe
-        asset_name: AudioPlaybackConnectorARM64.exe
-        asset_content_type: application/octet-stream
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ARM/Release/AudioPlaybackConnectorARM.exe
-        asset_name: AudioPlaybackConnectorARM.exe
-        asset_content_type: application/octet-stream
+        generate_release_notes: true
+        files: |
+          x64/Release/AudioPlaybackConnector64.exe
+          Release/AudioPlaybackConnector32.exe
+          ARM64/Release/AudioPlaybackConnectorARM64.exe
+          ARM/Release/AudioPlaybackConnectorARM.exe
