@@ -41,21 +41,24 @@ jobs:
     - name: Generate translation resources
       run: |
         cd translate
-        pip install -r requirements.txt
         python ./po2ymo.py ./source/zh_CN.po ./generated/zh_CN.ymo
         python ./po2ymo.py ./source/zh_TW.po ./generated/zh_TW.ymo
-        ./gen_rc.sh
+        sh ./gen_rc.sh
       shell: bash
 
     - name: Restore NuGet packages
       run: nuget restore AudioPlaybackConnector.sln
 
-    - name: Build All Architectures
+    - name: Build Main Architectures (x64, x86, ARM64)
       run: |
         msbuild AudioPlaybackConnector.sln -p:Configuration=Release -p:Platform=x64 -m
         msbuild AudioPlaybackConnector.sln -p:Configuration=Release -p:Platform=x86 -m
         msbuild AudioPlaybackConnector.sln -p:Configuration=Release -p:Platform=ARM64 -m
-        msbuild AudioPlaybackConnector.sln -p:Configuration=Release -p:Platform=ARM -m
+      shell: cmd
+
+    - name: Build Legacy ARM (optional)
+      run: msbuild AudioPlaybackConnector.sln -p:Configuration=Release -p:Platform=ARM -m
+      continue-on-error: true
       shell: cmd
 
     - name: Upload Build Artifacts
@@ -69,8 +72,7 @@ jobs:
           Release/AudioPlaybackConnector32.pdb
           ARM64/Release/AudioPlaybackConnectorARM64.exe
           ARM64/Release/AudioPlaybackConnectorARM64.pdb
-          ARM/Release/AudioPlaybackConnectorARM.exe
-          ARM/Release/AudioPlaybackConnectorARM.pdb
+        if-no-files-found: ignore
 
     - name: Publish GitHub Release
       uses: softprops/action-gh-release@v2
@@ -86,4 +88,3 @@ jobs:
           x64/Release/AudioPlaybackConnector64.exe
           Release/AudioPlaybackConnector32.exe
           ARM64/Release/AudioPlaybackConnectorARM64.exe
-          ARM/Release/AudioPlaybackConnectorARM.exe

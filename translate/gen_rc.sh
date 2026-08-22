@@ -1,7 +1,7 @@
 #!/bin/sh
 
-./po2ymo.py ./source/zh_CN.po ./generated/zh_CN.ymo
-./po2ymo.py ./source/zh_TW.po ./generated/zh_TW.ymo
+python3 ./po2ymo.py ./source/zh_CN.po ./generated/zh_CN.ymo || python ./po2ymo.py ./source/zh_CN.po ./generated/zh_CN.ymo
+python3 ./po2ymo.py ./source/zh_TW.po ./generated/zh_TW.ymo || python ./po2ymo.py ./source/zh_TW.po ./generated/zh_TW.ymo
 
 echo '#include "../../targetver.h"' > ./generated/translate.rc
 echo '#include "windows.h"' >> ./generated/translate.rc
