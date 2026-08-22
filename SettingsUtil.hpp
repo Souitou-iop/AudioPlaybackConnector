@@ -39,12 +39,13 @@ inline void SetRunAtStartup(bool enable)
 inline void DefaultSettings()
 {
 	g_reconnect = false;
-	g_startupReconnectDeviceId.clear();
-	g_lostConnectionInSession.clear();
-	g_connectingDeviceId.clear();
+	g_startupReconnectDevices.clear();
+	g_lostConnectionsInCurrentSession.clear();
+	g_connectingDeviceIds.clear();
 	g_runAtStartup = IsRunAtStartupEnabled();
 	g_autoConnectNearby = false;
 	g_preventSleepWhileStreaming = true;
+	g_multiDeviceMode = false;
 	g_deviceVolumes.clear();
 }
 
@@ -89,6 +90,9 @@ inline void LoadSettings()
 		if (jsonObj.HasKey(L"preventSleepWhileStreaming"))
 			g_preventSleepWhileStreaming = jsonObj.Lookup(L"preventSleepWhileStreaming").GetBoolean();
 
+		if (jsonObj.HasKey(L"multiDeviceMode"))
+			g_multiDeviceMode = jsonObj.Lookup(L"multiDeviceMode").GetBoolean();
+
 		if (jsonObj.HasKey(L"deviceVolumes"))
 		{
 			auto devVols = jsonObj.Lookup(L"deviceVolumes").GetObject();
@@ -98,22 +102,20 @@ inline void LoadSettings()
 			}
 		}
 
-		// Only load startup device if g_reconnect is enabled by the user
+		// Only load startup devices if g_reconnect is enabled by the user
 		if (g_reconnect && jsonObj.HasKey(L"lastDevices"))
 		{
 			auto lastDevices = jsonObj.Lookup(L"lastDevices").GetArray();
-			if (lastDevices.Size() > 0)
+			g_startupReconnectDevices.reserve(lastDevices.Size());
+			for (const auto& i : lastDevices)
 			{
-				auto first = lastDevices.GetAt(0);
-				if (first.ValueType() == JsonValueType::String)
-				{
-					g_startupReconnectDeviceId = first.GetString().c_str();
-				}
+				if (i.ValueType() == JsonValueType::String)
+					g_startupReconnectDevices.push_back(std::wstring(i.GetString()));
 			}
 		}
 		else
 		{
-			g_startupReconnectDeviceId.clear();
+			g_startupReconnectDevices.clear();
 		}
 	}
 	CATCH_LOG();
@@ -128,6 +130,7 @@ inline void SaveSettings()
 		jsonObj.Insert(L"runAtStartup", JsonValue::CreateBooleanValue(g_runAtStartup));
 		jsonObj.Insert(L"autoConnectNearby", JsonValue::CreateBooleanValue(g_autoConnectNearby));
 		jsonObj.Insert(L"preventSleepWhileStreaming", JsonValue::CreateBooleanValue(g_preventSleepWhileStreaming));
+		jsonObj.Insert(L"multiDeviceMode", JsonValue::CreateBooleanValue(g_multiDeviceMode));
 
 		JsonObject devVols;
 		for (const auto& pair : g_deviceVolumes)
@@ -139,13 +142,16 @@ inline void SaveSettings()
 		JsonArray lastDevices;
 		if (g_reconnect)
 		{
-			if (g_activeConnection.has_value())
+			for (const auto& i : g_audioPlaybackConnections)
 			{
-				lastDevices.Append(JsonValue::CreateStringValue(g_activeConnection->id));
+				lastDevices.Append(JsonValue::CreateStringValue(i.first));
 			}
-			else if (!g_startupReconnectDeviceId.empty())
+			if (g_audioPlaybackConnections.empty())
 			{
-				lastDevices.Append(JsonValue::CreateStringValue(g_startupReconnectDeviceId));
+				for (const auto& id : g_startupReconnectDevices)
+				{
+					lastDevices.Append(JsonValue::CreateStringValue(id));
+				}
 			}
 		}
 		jsonObj.Insert(L"lastDevices", lastDevices);

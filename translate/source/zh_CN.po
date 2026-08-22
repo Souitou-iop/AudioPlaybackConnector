@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: AudioPlaybackConnector\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-22 23:10+0800\n"
-"PO-Revision-Date: 2026-08-22 23:10+0800\n"
+"POT-Creation-Date: 2026-08-22 23:50+0800\n"
+"PO-Revision-Date: 2026-08-22 23:50+0800\n"
 "Last-Translator: Richard Yu <yurichard3839@gmail.com>\n"
 "Language-Team: \n"
 "Language: zh_CN\n"
@@ -36,6 +36,9 @@ msgstr "连接"
 
 msgid "Disconnect"
 msgstr "断开"
+
+msgid "Disconnect all"
+msgstr "全部断开"
 
 msgid "Mute"
 msgstr "静音"
@@ -75,6 +78,9 @@ msgstr "自动连接已知设备"
 
 msgid "Prevent sleep while streaming"
 msgstr "播放时阻止系统休眠"
+
+msgid "Multi-device concurrent mode"
+msgstr "多设备并发连接模式"
 
 msgid "Connecting"
 msgstr "正在连接"

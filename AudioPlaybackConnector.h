@@ -1,7 +1,6 @@
 #pragma once
 
 #include "resource.h"
-#include <optional>
 
 using namespace winrt::Windows::Data::Json;
 using namespace winrt::Windows::Devices::Enumeration;
@@ -24,7 +23,6 @@ struct ConnectedDeviceInfo
 {
 	DeviceInformation device{ nullptr };
 	AudioPlaybackConnection connection{ nullptr };
-	std::wstring id;
 	std::wstring name;
 };
 
@@ -37,9 +35,7 @@ inline Flyout g_deviceFlyout = nullptr;
 inline StackPanel g_deviceListPanel = nullptr;
 inline FocusState g_menuFocusState = FocusState::Unfocused;
 
-// Single active Bluetooth A2DP audio stream
-inline std::optional<ConnectedDeviceInfo> g_activeConnection;
-
+inline std::unordered_map<std::wstring, ConnectedDeviceInfo> g_audioPlaybackConnections;
 inline std::unordered_map<std::wstring, double> g_deviceVolumes;
 inline HICON g_hIconLight = nullptr;
 inline HICON g_hIconDark = nullptr;
@@ -57,25 +53,27 @@ inline bool g_reconnect = false;
 inline bool g_runAtStartup = false;
 inline bool g_autoConnectNearby = false;
 inline bool g_preventSleepWhileStreaming = true;
+inline bool g_multiDeviceMode = false;
 inline std::wstring g_currentDefaultAudioEndpointId;
 
-// Startup reconnect device ID (only if g_reconnect is enabled)
-inline std::wstring g_startupReconnectDeviceId;
+// Startup reconnect device IDs (only if g_reconnect is enabled)
+inline std::vector<std::wstring> g_startupReconnectDevices;
 
-// Device that dropped in the current session (for auto-reconnect on return)
-inline std::wstring g_lostConnectionInSession;
+// Devices that dropped in the current session (for auto-reconnect on return)
+inline std::unordered_set<std::wstring> g_lostConnectionsInCurrentSession;
 
-// Currently connecting device ID
-inline std::wstring g_connectingDeviceId;
+// Currently connecting device IDs
+inline std::unordered_set<std::wstring> g_connectingDeviceIds;
 
 inline HANDLE g_mmcssHandle = nullptr;
 inline DeviceWatcher g_deviceWatcher = nullptr;
 
 void UpdateTrayTooltip();
 void ReopenAudioConnections();
+void DisconnectAllDevices();
 void ToggleLastConnectedDevice();
 void UpdateAudioThreadPriority(bool enable);
-void UpdatePowerLock(bool hasConnection);
+void UpdatePowerLock(bool hasConnections);
 void SetupDeviceWatcher(bool enable);
 void ShowDevicePanel();
 void SetDeviceVolume(std::wstring_view deviceId, float volume);
