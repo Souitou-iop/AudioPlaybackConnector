@@ -32,6 +32,7 @@ inline HWND g_hWndXaml = nullptr;
 inline Canvas g_xamlCanvas = nullptr;
 inline MenuFlyout g_xamlMenu = nullptr;
 inline Flyout g_deviceFlyout = nullptr;
+inline StackPanel g_deviceListPanel = nullptr;
 inline FocusState g_menuFocusState = FocusState::Unfocused;
 inline std::unordered_map<std::wstring, ConnectedDeviceInfo> g_audioPlaybackConnections;
 inline std::unordered_map<std::wstring, double> g_deviceVolumes;
@@ -51,6 +52,7 @@ inline bool g_reconnect = false;
 inline bool g_runAtStartup = false;
 inline bool g_autoConnectNearby = false;
 inline bool g_preventSleepWhileStreaming = true;
+inline std::wstring g_currentDefaultAudioEndpointId;
 
 // Devices to restore on cold start (only if g_reconnect is enabled)
 inline std::vector<std::wstring> g_startupReconnectDevices;
@@ -71,11 +73,9 @@ void UpdateAudioThreadPriority(bool enable);
 void UpdatePowerLock(bool hasConnections);
 void SetupDeviceWatcher(bool enable);
 void ShowDevicePanel();
-void RefreshDevicePanel();
+void UpdateDeviceListUI(const winrt::Windows::Foundation::Collections::IVectorView<DeviceInformation>& devices);
 void SetDeviceVolume(std::wstring_view deviceId, float volume);
 float GetDeviceVolume(std::wstring_view deviceId);
-void SetDeviceMute(std::wstring_view deviceId, bool mute);
-bool GetDeviceMute(std::wstring_view deviceId);
 void ExitApp();
 
 #include "Util.hpp"
