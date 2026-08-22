@@ -29,6 +29,20 @@ float GetDeviceVolume(std::wstring_view deviceId);
 void CheckAudioMeter();
 void ExitApp();
 
+inline FontIcon CreateFontIcon(std::wstring_view glyph, double fontSize = 0)
+{
+	FontIcon icon;
+	icon.FontFamily(FontFamily(L"Segoe Fluent Icons, Segoe MDL2 Assets"));
+	icon.Glyph(glyph);
+	if (fontSize > 0)
+	{
+		icon.FontSize(fontSize);
+	}
+	return icon;
+}
+
+
+
 class AudioEndpointNotificationClient : public IMMNotificationClient
 {
 public:
@@ -229,38 +243,55 @@ void SetDeviceVolume(std::wstring_view deviceId, float volume)
 		return;
 
 	wil::com_ptr<IMMDevice> defaultDevice;
-	if (FAILED(g_deviceEnumerator->GetDefaultAudioEndpoint(eRender, eMultimedia, defaultDevice.put())))
+	if (FAILED(g_deviceEnumerator->GetDefaultAudioEndpoint(eRender, eMultimedia, defaultDevice.put())) || !defaultDevice)
 		return;
 
-	wil::com_ptr<IAudioSessionManager2> sessionManager;
-	if (FAILED(defaultDevice->Activate(__uuidof(IAudioSessionManager2), CLSCTX_INPROC_SERVER, nullptr, sessionManager.put_void())))
-		return;
-
-	wil::com_ptr<IAudioSessionEnumerator> sessionEnumerator;
-	if (FAILED(sessionManager->GetSessionEnumerator(sessionEnumerator.put())))
-		return;
-
-	int count = 0;
-	sessionEnumerator->GetCount(&count);
-
-	for (int i = 0; i < count; ++i)
+	// 1. Direct Master Endpoint Volume (Instantly scales physical speaker/headphone volume for all Bluetooth & System audio)
+	wil::com_ptr<IAudioEndpointVolume> endpointVolume;
+	if (SUCCEEDED(defaultDevice->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_INPROC_SERVER, nullptr, endpointVolume.put_void())) && endpointVolume)
 	{
-		wil::com_ptr<IAudioSessionControl> control;
-		if (FAILED(sessionEnumerator->GetSession(i, control.put())))
-			continue;
-
-		wil::com_ptr<IAudioSessionControl2> control2;
-		if (SUCCEEDED(control->QueryInterface(__uuidof(IAudioSessionControl2), control2.put_void())))
+		if (volume <= 0.001f)
 		{
-			DWORD pid = 0;
-			control2->GetProcessId(&pid);
-
-			if (pid == GetCurrentProcessId() || pid == 0)
+			endpointVolume->SetMute(TRUE, nullptr);
+		}
+		else
+		{
+			BOOL isMuted = FALSE;
+			if (SUCCEEDED(endpointVolume->GetMute(&isMuted)) && isMuted)
 			{
-				wil::com_ptr<ISimpleAudioVolume> simpleVol;
-				if (SUCCEEDED(control->QueryInterface(__uuidof(ISimpleAudioVolume), simpleVol.put_void())))
+				endpointVolume->SetMute(FALSE, nullptr);
+			}
+			endpointVolume->SetMasterVolumeLevelScalar(volume, nullptr);
+		}
+	}
+
+	// 2. Adjust active audio sessions
+	wil::com_ptr<IAudioSessionManager2> sessionManager;
+	if (SUCCEEDED(defaultDevice->Activate(__uuidof(IAudioSessionManager2), CLSCTX_INPROC_SERVER, nullptr, sessionManager.put_void())) && sessionManager)
+	{
+		wil::com_ptr<IAudioSessionEnumerator> sessionEnumerator;
+		if (SUCCEEDED(sessionManager->GetSessionEnumerator(sessionEnumerator.put())) && sessionEnumerator)
+		{
+			int count = 0;
+			sessionEnumerator->GetCount(&count);
+			for (int i = 0; i < count; ++i)
+			{
+				wil::com_ptr<IAudioSessionControl> control;
+				if (FAILED(sessionEnumerator->GetSession(i, control.put())) || !control)
+					continue;
+
+				wil::com_ptr<IAudioSessionControl2> control2;
+				if (SUCCEEDED(control->QueryInterface(__uuidof(IAudioSessionControl2), control2.put_void())) && control2)
 				{
-					simpleVol->SetMasterVolume(volume, nullptr);
+					wil::com_ptr<ISimpleAudioVolume> simpleVol;
+					if (SUCCEEDED(control->QueryInterface(__uuidof(ISimpleAudioVolume), simpleVol.put_void())) && simpleVol)
+					{
+						AudioSessionState state;
+						if (SUCCEEDED(control2->GetState(&state)) && state == AudioSessionStateActive)
+						{
+							simpleVol->SetMasterVolume(volume, nullptr);
+						}
+					}
 				}
 			}
 		}
@@ -274,6 +305,24 @@ float GetDeviceVolume(std::wstring_view deviceId)
 	{
 		return static_cast<float>(it->second);
 	}
+
+	if (g_deviceEnumerator)
+	{
+		wil::com_ptr<IMMDevice> defaultDevice;
+		if (SUCCEEDED(g_deviceEnumerator->GetDefaultAudioEndpoint(eRender, eMultimedia, defaultDevice.put())) && defaultDevice)
+		{
+			wil::com_ptr<IAudioEndpointVolume> endpointVolume;
+			if (SUCCEEDED(defaultDevice->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_INPROC_SERVER, nullptr, endpointVolume.put_void())) && endpointVolume)
+			{
+				float curVol = 1.0f;
+				if (SUCCEEDED(endpointVolume->GetMasterVolumeLevelScalar(&curVol)))
+				{
+					return curVol;
+				}
+			}
+		}
+	}
+
 	return 1.0f; // Default 100%
 }
 
@@ -510,6 +559,10 @@ void UpdateHeaderBadgeUI()
 	{
 		g_panelDisconnectAllBtn.Visibility((g_multiDeviceMode && g_audioPlaybackConnections.size() > 1) ? Visibility::Visible : Visibility::Collapsed);
 	}
+	if (g_panelRefreshAudioBtn)
+	{
+		g_panelRefreshAudioBtn.Visibility(!g_audioPlaybackConnections.empty() ? Visibility::Visible : Visibility::Collapsed);
+	}
 }
 
 void UpdateDevicePanelUI()
@@ -605,21 +658,23 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 		bool isPreferred = (!g_preferredDeviceId.empty() && g_preferredDeviceId == devId);
 		int batteryPct = GetBatteryPercentFromDevice(dev);
 
-		// Card Border
+		// Unified Card Border with fixed MinHeight for consistent visual banner size
 		Border cardBorder;
 		cardBorder.CornerRadius(CornerRadius{ 8, 8, 8, 8 });
-		cardBorder.Padding({ 12, 10, 12, 10 });
-		cardBorder.Margin({ 0, 4, 0, 4 });
+		cardBorder.Padding({ 12, 8, 12, 8 });
+		cardBorder.Margin({ 0, 3, 0, 3 });
+		cardBorder.MinHeight(54);
 		cardBorder.Background(SolidColorBrush(winrt::Windows::UI::Color{ 0x18, 0x80, 0x80, 0x80 }));
 
-		StackPanel cardStack;
-
-		// Card Top Row: Star Button + Icon + Name & Status + Action Button
+		// Top Row: Star (24px) + Icon (24px) + Name & Status (1 Star) + Action (60px)
 		Grid topGrid;
+		topGrid.VerticalAlignment(VerticalAlignment::Center);
+
 		ColumnDefinition colStar, colIcon, colName, colAction;
-		colStar.Width(GridLength{ 26, GridUnitType::Pixel });
-		colIcon.Width(GridLength{ 26, GridUnitType::Pixel });
-		colAction.Width(GridLength{ 0, GridUnitType::Auto });
+		colStar.Width(GridLength{ 24, GridUnitType::Pixel });
+		colIcon.Width(GridLength{ 24, GridUnitType::Pixel });
+		colName.Width(GridLength{ 1, GridUnitType::Star });
+		colAction.Width(GridLength{ 60, GridUnitType::Pixel });
 		topGrid.ColumnDefinitions().Append(colStar);
 		topGrid.ColumnDefinitions().Append(colIcon);
 		topGrid.ColumnDefinitions().Append(colName);
@@ -630,21 +685,21 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 		starBtn.Background(SolidColorBrush(winrt::Windows::UI::Color{ 0, 0, 0, 0 }));
 		starBtn.BorderThickness({ 0, 0, 0, 0 });
 		starBtn.Padding({ 0, 0, 0, 0 });
+		starBtn.Width(24);
+		starBtn.Height(24);
+		starBtn.HorizontalAlignment(HorizontalAlignment::Center);
 		starBtn.VerticalAlignment(VerticalAlignment::Center);
 
-		FontIcon starIcon;
-		starIcon.FontSize(13);
+		FontIcon starIcon = CreateFontIcon(isPreferred ? L"\uE735" : L"\uE734", 13);
 		if (isPreferred)
 		{
-			starIcon.Glyph(L"ç35"); // Solid Star
 			starIcon.Foreground(SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0xFF, 0xC1, 0x07 })); // Amber Gold
 			starIcon.Opacity(1.0);
 		}
 		else
 		{
-			starIcon.Glyph(L"ç34"); // Outline Star
 			starIcon.Foreground(SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0xFF, 0xFF, 0xFF }));
-			starIcon.Opacity(0.3);
+			starIcon.Opacity(0.35);
 		}
 		starBtn.Content(starIcon);
 		starBtn.Click([devId, isPreferred](const auto&, const auto&) {
@@ -663,9 +718,8 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 		topGrid.Children().Append(starBtn);
 
 		// Phone Icon
-		FontIcon phoneIcon;
-		phoneIcon.Glyph(L"èEA");
-		phoneIcon.FontSize(17);
+		FontIcon phoneIcon = CreateFontIcon(L"\uE8EA", 16);
+		phoneIcon.HorizontalAlignment(HorizontalAlignment::Center);
 		phoneIcon.VerticalAlignment(VerticalAlignment::Center);
 		phoneIcon.Opacity(0.85);
 		Grid::SetColumn(phoneIcon, 1);
@@ -674,31 +728,54 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 		// Name & Status Panel
 		StackPanel namePanel;
 		namePanel.VerticalAlignment(VerticalAlignment::Center);
-		namePanel.Margin({ 6, 0, 8, 0 });
+		namePanel.Margin({ 8, 0, 6, 0 });
 
 		// Name + Battery Row
 		StackPanel titleRow;
 		titleRow.Orientation(Orientation::Horizontal);
+		titleRow.VerticalAlignment(VerticalAlignment::Center);
 
 		TextBlock nameText;
 		nameText.Text(devName);
 		nameText.FontSize(13);
 		nameText.FontWeight(winrt::Windows::UI::Text::FontWeights::SemiBold());
 		nameText.TextTrimming(TextTrimming::CharacterEllipsis);
-		nameText.MaxWidth(150);
+		nameText.MaxWidth(160);
 		titleRow.Children().Append(nameText);
 
 		if (batteryPct >= 0)
 		{
-			TextBlock batteryText;
+			StackPanel batPanel;
+			batPanel.Orientation(Orientation::Horizontal);
+			batPanel.VerticalAlignment(VerticalAlignment::Center);
+			batPanel.Margin({ 6, 0, 0, 0 });
+			batPanel.Opacity(0.7);
+
+			const wchar_t* batGlyph = L"\uE859";
+			if (batteryPct <= 5) batGlyph = L"\uE83F";
+			else if (batteryPct <= 15) batGlyph = L"\uE850";
+			else if (batteryPct <= 25) batGlyph = L"\uE851";
+			else if (batteryPct <= 35) batGlyph = L"\uE852";
+			else if (batteryPct <= 45) batGlyph = L"\uE853";
+			else if (batteryPct <= 55) batGlyph = L"\uE854";
+			else if (batteryPct <= 65) batGlyph = L"\uE855";
+			else if (batteryPct <= 75) batGlyph = L"\uE856";
+			else if (batteryPct <= 85) batGlyph = L"\uE857";
+			else if (batteryPct <= 95) batGlyph = L"\uE858";
+
+			FontIcon batIcon = CreateFontIcon(batGlyph, 11);
+			batIcon.VerticalAlignment(VerticalAlignment::Center);
+			batPanel.Children().Append(batIcon);
+
+			TextBlock batValText;
 			wchar_t batBuf[16];
-			swprintf_s(batBuf, L" 🔋%d%%", batteryPct);
-			batteryText.Text(batBuf);
-			batteryText.FontSize(11);
-			batteryText.Opacity(0.7);
-			batteryText.VerticalAlignment(VerticalAlignment::Center);
-			batteryText.Margin({ 4, 0, 0, 0 });
-			titleRow.Children().Append(batteryText);
+			swprintf_s(batBuf, L" %d%%", batteryPct);
+			batValText.Text(batBuf);
+			batValText.FontSize(11);
+			batValText.VerticalAlignment(VerticalAlignment::Center);
+			batPanel.Children().Append(batValText);
+
+			titleRow.Children().Append(batPanel);
 		}
 
 		namePanel.Children().Append(titleRow);
@@ -706,6 +783,7 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 		if (isConnected)
 		{
 			TextBlock statusText;
+			statusText.Margin({ 0, 2, 0, 0 });
 			if (g_isAudioPlaying)
 			{
 				std::wstring playingStr = L"● ";
@@ -725,6 +803,7 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 		else if (hasError)
 		{
 			TextBlock errorText;
+			errorText.Margin({ 0, 2, 0, 0 });
 			errorText.Text(g_deviceErrorMessages[devId]);
 			errorText.FontSize(11);
 			errorText.Foreground(SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0xE7, 0x48, 0x56 }));
@@ -735,22 +814,36 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 		Grid::SetColumn(namePanel, 2);
 		topGrid.Children().Append(namePanel);
 
-		// Action Button / Progress
+		// Action Button / Progress - Unified 60x28 dimensions for perfect alignment
 		if (isConnecting)
 		{
+			Grid ringBox;
+			ringBox.Width(60);
+			ringBox.Height(28);
+			ringBox.HorizontalAlignment(HorizontalAlignment::Center);
+			ringBox.VerticalAlignment(VerticalAlignment::Center);
+
 			ProgressRing ring;
 			ring.IsActive(true);
-			ring.Width(20);
-			ring.Height(20);
-			Grid::SetColumn(ring, 3);
-			topGrid.Children().Append(ring);
+			ring.Width(18);
+			ring.Height(18);
+			ring.HorizontalAlignment(HorizontalAlignment::Center);
+			ring.VerticalAlignment(VerticalAlignment::Center);
+			ringBox.Children().Append(ring);
+
+			Grid::SetColumn(ringBox, 3);
+			topGrid.Children().Append(ringBox);
 		}
 		else if (isConnected)
 		{
 			Button disconnectBtn;
 			disconnectBtn.Content(winrt::box_value(_(L"Disconnect")));
-			disconnectBtn.Padding({ 10, 4, 10, 4 });
+			disconnectBtn.Width(60);
+			disconnectBtn.Height(28);
+			disconnectBtn.Padding({ 0, 0, 0, 0 });
 			disconnectBtn.FontSize(11);
+			disconnectBtn.HorizontalAlignment(HorizontalAlignment::Center);
+			disconnectBtn.VerticalAlignment(VerticalAlignment::Center);
 			disconnectBtn.Click([devId](const auto&, const auto&) {
 				if (g_multiDeviceMode && g_audioPlaybackConnections.size() > 1)
 				{
@@ -780,8 +873,12 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 		{
 			Button connectBtn;
 			connectBtn.Content(winrt::box_value(_(L"Connect")));
-			connectBtn.Padding({ 12, 4, 12, 4 });
+			connectBtn.Width(60);
+			connectBtn.Height(28);
+			connectBtn.Padding({ 0, 0, 0, 0 });
 			connectBtn.FontSize(11);
+			connectBtn.HorizontalAlignment(HorizontalAlignment::Center);
+			connectBtn.VerticalAlignment(VerticalAlignment::Center);
 			connectBtn.Click([dev, devId](const auto&, const auto&) {
 				// Hardware capacity check for Multi-device mode
 				if (g_multiDeviceMode && g_audioPlaybackConnections.size() >= 2 && g_audioPlaybackConnections.find(devId) == g_audioPlaybackConnections.end())
@@ -797,67 +894,7 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 			topGrid.Children().Append(connectBtn);
 		}
 
-		cardStack.Children().Append(topGrid);
-
-		// Card Bottom Row: Volume Slider (Only visible when connected!)
-		if (isConnected)
-		{
-			Grid volGrid;
-			volGrid.Margin({ 0, 8, 0, 0 });
-
-			ColumnDefinition colVolIcon, colSlider, colVolVal;
-			colVolIcon.Width(GridLength{ 26, GridUnitType::Pixel });
-			colVolVal.Width(GridLength{ 40, GridUnitType::Pixel });
-			volGrid.ColumnDefinitions().Append(colVolIcon);
-			volGrid.ColumnDefinitions().Append(colSlider);
-			volGrid.ColumnDefinitions().Append(colVolVal);
-
-			float currentVol = GetDeviceVolume(devId);
-			int volPercent = static_cast<int>(currentVol * 100.0f + 0.5f);
-
-			FontIcon volIcon;
-			volIcon.Glyph(volPercent == 0 ? L"ç4F" : L"ç67");
-			volIcon.FontSize(14);
-			volIcon.VerticalAlignment(VerticalAlignment::Center);
-			Grid::SetColumn(volIcon, 0);
-			volGrid.Children().Append(volIcon);
-
-			TextBlock volValText;
-			wchar_t volBuf[16];
-			swprintf_s(volBuf, L"%d%%", volPercent);
-			volValText.Text(volBuf);
-			volValText.FontSize(11);
-			volValText.FontWeight(winrt::Windows::UI::Text::FontWeights::Medium());
-			volValText.VerticalAlignment(VerticalAlignment::Center);
-			volValText.HorizontalAlignment(HorizontalAlignment::Right);
-			volValText.Opacity(0.85);
-			Grid::SetColumn(volValText, 2);
-			volGrid.Children().Append(volValText);
-
-			Slider slider;
-			slider.Minimum(0);
-			slider.Maximum(100);
-			slider.Value(volPercent);
-			slider.Margin({ 4, 0, 4, 0 });
-			slider.VerticalAlignment(VerticalAlignment::Center);
-
-			slider.ValueChanged([devId, volValText, volIcon](const auto& /*sender*/, const auto& args) {
-				int newPercent = static_cast<int>(args.NewValue());
-				float newVol = newPercent / 100.0f;
-				SetDeviceVolume(devId, newVol);
-
-				wchar_t buf[16];
-				swprintf_s(buf, L"%d%%", newPercent);
-				volValText.Text(buf);
-				volIcon.Glyph(newPercent == 0 ? L"ç4F" : L"ç67");
-			});
-			Grid::SetColumn(slider, 1);
-			volGrid.Children().Append(slider);
-
-			cardStack.Children().Append(volGrid);
-		}
-
-		cardBorder.Child(cardStack);
+		cardBorder.Child(topGrid);
 		targetPanel.Children().Append(cardBorder);
 	}
 
@@ -892,16 +929,21 @@ winrt::fire_and_forget RefreshDevicePanelAsync(bool forceReopen)
 		{
 			POINT pt;
 			GetCursorPos(&pt);
-			iconRect = { pt.x - 8, pt.y - 8, pt.x + 8, pt.y + 8 };
+			iconRect = { pt.x - 12, pt.y - 12, pt.x + 12, pt.y + 12 };
 		}
 
 		auto dpi = GetDpiForWindow(g_hWnd);
-		SetWindowPos(g_hWndXaml, 0, 0, 0, 0, 0, SWP_NOZORDER | SWP_SHOWWINDOW);
-		SetWindowPos(g_hWnd, HWND_TOPMOST, iconRect.left, iconRect.top, 0, 0, SWP_SHOWWINDOW);
+		int iconW = iconRect.right - iconRect.left;
+		int iconH = iconRect.bottom - iconRect.top;
+		if (iconW <= 0) iconW = 24;
+		if (iconH <= 0) iconH = 24;
+
+		SetWindowPos(g_hWnd, HWND_TOPMOST, iconRect.left, iconRect.top, iconW, iconH, SWP_SHOWWINDOW);
+		SetWindowPos(g_hWndXaml, nullptr, 0, 0, iconW, iconH, SWP_NOZORDER | SWP_SHOWWINDOW);
 		SetForegroundWindow(g_hWnd);
 
-		g_xamlCanvas.Width(static_cast<float>((iconRect.right - iconRect.left) * USER_DEFAULT_SCREEN_DPI / dpi));
-		g_xamlCanvas.Height(static_cast<float>((iconRect.bottom - iconRect.top) * USER_DEFAULT_SCREEN_DPI / dpi));
+		g_xamlCanvas.Width(static_cast<float>(iconW * USER_DEFAULT_SCREEN_DPI / dpi));
+		g_xamlCanvas.Height(static_cast<float>(iconH * USER_DEFAULT_SCREEN_DPI / dpi));
 
 		// Root Container Border
 		Border rootBorder;
@@ -910,20 +952,24 @@ winrt::fire_and_forget RefreshDevicePanelAsync(bool forceReopen)
 
 		StackPanel rootPanel;
 
-		// Header: Title + Capacity Badge + Disconnect All + Refresh Button + Close Button
+		// Header: Title + Capacity Badge + Disconnect All + Refresh Audio + Refresh List + Close Button
 		Grid headerGrid;
 		ColumnDefinition colTitle;
 		ColumnDefinition colBadge;
 		ColumnDefinition colDisconnectAll;
+		ColumnDefinition colRefreshAudio;
 		ColumnDefinition colRefresh;
 		ColumnDefinition colClose;
+		colTitle.Width(GridLength{ 1, GridUnitType::Star });
 		colBadge.Width(GridLength{ 0, GridUnitType::Auto });
 		colDisconnectAll.Width(GridLength{ 0, GridUnitType::Auto });
+		colRefreshAudio.Width(GridLength{ 0, GridUnitType::Auto });
 		colRefresh.Width(GridLength{ 0, GridUnitType::Auto });
 		colClose.Width(GridLength{ 0, GridUnitType::Auto });
 		headerGrid.ColumnDefinitions().Append(colTitle);
 		headerGrid.ColumnDefinitions().Append(colBadge);
 		headerGrid.ColumnDefinitions().Append(colDisconnectAll);
+		headerGrid.ColumnDefinitions().Append(colRefreshAudio);
 		headerGrid.ColumnDefinitions().Append(colRefresh);
 		headerGrid.ColumnDefinitions().Append(colClose);
 
@@ -957,33 +1003,47 @@ winrt::fire_and_forget RefreshDevicePanelAsync(bool forceReopen)
 		Grid::SetColumn(discAllBtn, 2);
 		headerGrid.Children().Append(discAllBtn);
 
+		// 1. Audio Connection Reconnect / Refresh Button (Streaming Wave Icon:  - Fix no sound)
+		Button refreshAudioBtn;
+		g_panelRefreshAudioBtn = refreshAudioBtn;
+		FontIcon audioIcon = CreateFontIcon(L"\uE93E", 13); // Streaming (( · ))
+		refreshAudioBtn.Content(audioIcon);
+		refreshAudioBtn.Padding({ 6, 6, 6, 6 });
+		refreshAudioBtn.Margin({ 0, 0, 4, 0 });
+		ToolTipService::SetToolTip(refreshAudioBtn, winrt::box_value(_(L"Refresh Audio Connection (Fix no sound)")));
+		refreshAudioBtn.Click([](const auto&, const auto&) {
+			ReopenAudioConnections();
+		});
+		Grid::SetColumn(refreshAudioBtn, 3);
+		headerGrid.Children().Append(refreshAudioBtn);
+
+		// 2. Device List Scan / Refresh Button (Device Discovery Radar Icon: )
 		Button refreshBtn;
-		FontIcon refreshIcon;
-		refreshIcon.Glyph(L"ç2C");
-		refreshIcon.FontSize(12);
+		FontIcon refreshIcon = CreateFontIcon(L"\uEBDE", 13); // DeviceDiscovery
 		refreshBtn.Content(refreshIcon);
 		refreshBtn.Padding({ 6, 6, 6, 6 });
 		refreshBtn.Margin({ 0, 0, 4, 0 });
+		ToolTipService::SetToolTip(refreshBtn, winrt::box_value(_(L"Scan Bluetooth devices / Refresh list")));
 		refreshBtn.Click([](const auto&, const auto&) {
 			g_deviceErrorMessages.clear();
 			RefreshDevicePanelAsync(false);
 		});
-		Grid::SetColumn(refreshBtn, 3);
+		Grid::SetColumn(refreshBtn, 4);
 		headerGrid.Children().Append(refreshBtn);
 
+		// 3. Close Button (Close Icon: )
 		Button closeBtn;
-		FontIcon closeIcon;
-		closeIcon.Glyph(L"èBB");
-		closeIcon.FontSize(11);
+		FontIcon closeIcon = CreateFontIcon(L"\uE8BB", 11);
 		closeBtn.Content(closeIcon);
 		closeBtn.Padding({ 6, 6, 6, 6 });
+		ToolTipService::SetToolTip(closeBtn, winrt::box_value(_(L"Close")));
 		closeBtn.Click([](const auto&, const auto&) {
 			if (g_deviceFlyout)
 			{
 				g_deviceFlyout.Hide();
 			}
 		});
-		Grid::SetColumn(closeBtn, 4);
+		Grid::SetColumn(closeBtn, 5);
 		headerGrid.Children().Append(closeBtn);
 
 		rootPanel.Children().Append(headerGrid);
@@ -1011,13 +1071,16 @@ winrt::fire_and_forget RefreshDevicePanelAsync(bool forceReopen)
 
 		Flyout flyout;
 		flyout.Content(rootBorder);
+		flyout.Placement(FlyoutPlacementMode::Top);
 		flyout.ShouldConstrainToRootBounds(false);
 		flyout.Closed([](const auto&, const auto&) {
 			KillTimer(g_hWnd, IDT_AUDIO_METER);
 			g_deviceListPanel = nullptr;
 			g_panelBadgeText = nullptr;
 			g_panelDisconnectAllBtn = nullptr;
+			g_panelRefreshAudioBtn = nullptr;
 			g_deviceStatusTextBlocks.clear();
+			g_deviceFlyout = nullptr;
 			ShowWindow(g_hWnd, SW_HIDE);
 		});
 
@@ -1033,6 +1096,15 @@ winrt::fire_and_forget RefreshDevicePanelAsync(bool forceReopen)
 
 void ShowDevicePanel()
 {
+	if (g_xamlMenu)
+	{
+		try { g_xamlMenu.Hide(); } catch (...) {}
+	}
+	if (g_deviceFlyout && g_deviceListPanel)
+	{
+		g_deviceFlyout.Hide();
+		return;
+	}
 	RefreshDevicePanelAsync(true);
 }
 
@@ -1261,17 +1333,39 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			break;
 		case WM_CONTEXTMENU:
 		{
+			if (g_deviceFlyout)
+			{
+				try { g_deviceFlyout.Hide(); } catch (...) {}
+				g_deviceFlyout = nullptr;
+			}
+
 			if (g_menuFocusState == FocusState::Unfocused)
 				g_menuFocusState = FocusState::Keyboard;
 
+			POINT pt = {};
+			if (!GetCursorPos(&pt) || (pt.x == 0 && pt.y == 0))
+			{
+				RECT iconRect = {};
+				if (SUCCEEDED(Shell_NotifyIconGetRect(&g_niid, &iconRect)))
+				{
+					pt.x = (iconRect.left + iconRect.right) / 2;
+					pt.y = (iconRect.top + iconRect.bottom) / 2;
+				}
+				else
+				{
+					pt.x = GET_X_LPARAM(wParam);
+					pt.y = GET_Y_LPARAM(wParam);
+				}
+			}
+
 			auto dpi = GetDpiForWindow(hWnd);
 			Point point = {
-				static_cast<float>(GET_X_LPARAM(wParam) * USER_DEFAULT_SCREEN_DPI / dpi),
-				static_cast<float>(GET_Y_LPARAM(wParam) * USER_DEFAULT_SCREEN_DPI / dpi)
+				static_cast<float>(pt.x * USER_DEFAULT_SCREEN_DPI / dpi),
+				static_cast<float>(pt.y * USER_DEFAULT_SCREEN_DPI / dpi)
 			};
 
-			SetWindowPos(g_hWndXaml, 0, 0, 0, 0, 0, SWP_NOZORDER | SWP_SHOWWINDOW);
 			SetWindowPos(g_hWnd, HWND_TOPMOST, 0, 0, 1, 1, SWP_SHOWWINDOW);
+			SetWindowPos(g_hWndXaml, nullptr, 0, 0, 1, 1, SWP_NOZORDER | SWP_SHOWWINDOW);
 			SetForegroundWindow(hWnd);
 
 			g_xamlMenu.ShowAt(g_xamlCanvas, point);
@@ -1303,8 +1397,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 void SetupMenu()
 {
 	// Refresh Audio Connection
-	FontIcon refreshIcon;
-	refreshIcon.Glyph(L"ç2C");
+	FontIcon refreshIcon = CreateFontIcon(L"\uE72C");
 
 	MenuFlyoutItem refreshItem;
 	refreshItem.Text(_(L"Refresh Audio Connection"));
@@ -1314,8 +1407,7 @@ void SetupMenu()
 	});
 
 	// Sound Settings
-	FontIcon soundIcon;
-	soundIcon.Glyph(L"ç67");
+	FontIcon soundIcon = CreateFontIcon(L"\uE767");
 
 	MenuFlyoutItem soundItem;
 	soundItem.Text(_(L"Sound Settings"));
@@ -1325,8 +1417,7 @@ void SetupMenu()
 	});
 
 	// Bluetooth Settings
-	FontIcon btIcon;
-	btIcon.Glyph(L"ç02");
+	FontIcon btIcon = CreateFontIcon(L"\uE702");
 
 	MenuFlyoutItem btItem;
 	btItem.Text(_(L"Bluetooth Settings"));
@@ -1336,8 +1427,7 @@ void SetupMenu()
 	});
 
 	// Settings Submenu
-	FontIcon configIcon;
-	configIcon.Glyph(L"ç13");
+	FontIcon configIcon = CreateFontIcon(L"\uE713");
 
 	MenuFlyoutSubItem settingsSubMenu;
 	settingsSubMenu.Text(_(L"Settings"));
@@ -1437,8 +1527,7 @@ void SetupMenu()
 	MenuFlyoutSeparator mainSeparator;
 
 	// Exit
-	FontIcon closeIcon;
-	closeIcon.Glyph(L"èBB");
+	FontIcon closeIcon = CreateFontIcon(L"\uE8BB");
 
 	MenuFlyoutItem exitItem;
 	exitItem.Text(_(L"Exit"));
@@ -1691,10 +1780,8 @@ void UpdateNotifyIcon()
 
 	if (!Shell_NotifyIconW(NIM_MODIFY, &g_nid))
 	{
-		auto err = GetLastError();
-		if (err == ERROR_TIMEOUT || err == ERROR_FILE_NOT_FOUND)
+		if (Shell_NotifyIconW(NIM_ADD, &g_nid))
 		{
-			Shell_NotifyIconW(NIM_ADD, &g_nid);
 			Shell_NotifyIconW(NIM_SETVERSION, &g_nid);
 		}
 	}
@@ -1718,3 +1805,4 @@ void UpdateTrayTooltip()
 
 	Shell_NotifyIconW(NIM_MODIFY, &g_nid);
 }
+

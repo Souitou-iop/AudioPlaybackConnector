@@ -123,3 +123,12 @@ msgstr ""
 
 msgid "Battery"
 msgstr ""
+
+msgid "Refresh Audio Connection (Fix no sound)"
+msgstr ""
+
+msgid "Scan Bluetooth devices / Refresh list"
+msgstr ""
+
+msgid "Close"
+msgstr ""

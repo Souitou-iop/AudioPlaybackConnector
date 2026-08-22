@@ -123,3 +123,12 @@ msgstr "允許鍵盤多媒體鍵控制播放"
 
 msgid "Battery"
 msgstr "電量"
+
+msgid "Refresh Audio Connection (Fix no sound)"
+msgstr "重新連線音訊 (修復無聲)"
+
+msgid "Scan Bluetooth devices / Refresh list"
+msgstr "搜尋藍牙裝置 / 重新整理列表"
+
+msgid "Close"
+msgstr "關閉"

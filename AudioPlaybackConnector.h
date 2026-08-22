@@ -45,6 +45,7 @@ inline Flyout g_deviceFlyout = nullptr;
 inline StackPanel g_deviceListPanel = nullptr;
 inline TextBlock g_panelBadgeText = nullptr;
 inline Button g_panelDisconnectAllBtn = nullptr;
+inline Button g_panelRefreshAudioBtn = nullptr;
 inline winrt::Windows::Foundation::Collections::IVectorView<DeviceInformation> g_cachedDevices = nullptr;
 inline FocusState g_menuFocusState = FocusState::Unfocused;
 
