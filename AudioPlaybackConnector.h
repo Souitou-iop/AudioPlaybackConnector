@@ -13,30 +13,58 @@ namespace fs = std::filesystem;
 
 constexpr UINT WM_NOTIFYICON = WM_APP + 1;
 constexpr UINT WM_CONNECTDEVICE = WM_APP + 2;
+constexpr UINT WM_DEFAULT_AUDIO_DEVICE_CHANGED = WM_APP + 3;
+constexpr UINT WM_REFRESH_AUDIO = WM_APP + 4;
 
-HINSTANCE g_hInst;
-HWND g_hWnd;
-HWND g_hWndXaml;
-Canvas g_xamlCanvas = nullptr;
-Flyout g_xamlFlyout = nullptr;
-MenuFlyout g_xamlMenu = nullptr;
-FocusState g_menuFocusState = FocusState::Unfocused;
-DevicePicker g_devicePicker = nullptr;
-std::unordered_map<std::wstring, std::pair<DeviceInformation, AudioPlaybackConnection>> g_audioPlaybackConnections;
-HICON g_hIconLight = nullptr;
-HICON g_hIconDark = nullptr;
-NOTIFYICONDATAW g_nid = {
+struct ConnectedDeviceInfo
+{
+	DeviceInformation device{ nullptr };
+	AudioPlaybackConnection connection{ nullptr };
+	std::wstring name;
+};
+
+inline HINSTANCE g_hInst = nullptr;
+inline HWND g_hWnd = nullptr;
+inline HWND g_hWndXaml = nullptr;
+inline Canvas g_xamlCanvas = nullptr;
+inline MenuFlyout g_xamlMenu = nullptr;
+inline FocusState g_menuFocusState = FocusState::Unfocused;
+inline DevicePicker g_devicePicker = nullptr;
+inline std::unordered_map<std::wstring, ConnectedDeviceInfo> g_audioPlaybackConnections;
+inline HICON g_hIconLight = nullptr;
+inline HICON g_hIconDark = nullptr;
+inline NOTIFYICONDATAW g_nid = {
 	.cbSize = sizeof(g_nid),
 	.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP,
 	.uCallbackMessage = WM_NOTIFYICON,
 	.uVersion = NOTIFYICON_VERSION_4
 };
-NOTIFYICONIDENTIFIER g_niid = {
+inline NOTIFYICONIDENTIFIER g_niid = {
 	.cbSize = sizeof(g_niid)
 };
-UINT WM_TASKBAR_CREATED = 0;
-bool g_reconnect = false;
-std::vector<std::wstring> g_lastDevices;
+inline UINT WM_TASKBAR_CREATED = 0;
+inline bool g_reconnect = false;
+inline bool g_runAtStartup = false;
+inline bool g_autoConnectNearby = false;
+inline bool g_preventSleepWhileStreaming = true;
+
+// Devices to restore on cold start (only if g_reconnect is enabled)
+inline std::vector<std::wstring> g_startupReconnectDevices;
+
+// Devices that were active in the current running session and got dropped/lost (e.g. user walked away)
+// Strictly in-memory; never loaded across software restarts.
+inline std::unordered_set<std::wstring> g_lostConnectionsInCurrentSession;
+
+inline HANDLE g_mmcssHandle = nullptr;
+inline DeviceWatcher g_deviceWatcher = nullptr;
+
+void UpdateTrayTooltip();
+void ReopenAudioConnections();
+void ToggleLastConnectedDevice();
+void UpdateAudioThreadPriority(bool enable);
+void UpdatePowerLock(bool hasConnections);
+void SetupDeviceWatcher(bool enable);
+void ExitApp();
 
 #include "Util.hpp"
 #include "I18n.hpp"

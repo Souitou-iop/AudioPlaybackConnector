@@ -340,3 +340,6 @@ ASALocalRun/
 healthchecksdb
 
 translate/generated
+
+.DS_Store
+*/.DS_Store

@@ -3,20 +3,58 @@
 constexpr auto CONFIG_NAME = L"AudioPlaybackConnector.json";
 constexpr auto BUFFER_SIZE = 4096;
 
-void DefaultSettings()
+inline bool IsRunAtStartupEnabled()
 {
-	g_reconnect = false;
-	g_lastDevices.clear();
+	HKEY hKey = nullptr;
+	if (RegOpenKeyExW(HKEY_CURRENT_USER, LR"(Software\Microsoft\Windows\CurrentVersion\Run)", 0, KEY_READ, &hKey) == ERROR_SUCCESS)
+	{
+		DWORD type = 0;
+		DWORD size = 0;
+		LONG res = RegQueryValueExW(hKey, L"AudioPlaybackConnector", nullptr, &type, nullptr, &size);
+		RegCloseKey(hKey);
+		return (res == ERROR_SUCCESS && size > 0);
+	}
+	return false;
 }
 
-void LoadSettings()
+inline void SetRunAtStartup(bool enable)
+{
+	HKEY hKey = nullptr;
+	if (RegOpenKeyExW(HKEY_CURRENT_USER, LR"(Software\Microsoft\Windows\CurrentVersion\Run)", 0, KEY_SET_VALUE, &hKey) == ERROR_SUCCESS)
+	{
+		if (enable)
+		{
+			auto exePath = GetModuleFsPath(g_hInst).wstring();
+			std::wstring value = L"\"" + exePath + L"\"";
+			RegSetValueExW(hKey, L"AudioPlaybackConnector", 0, REG_SZ, reinterpret_cast<const BYTE*>(value.c_str()), static_cast<DWORD>((value.length() + 1) * sizeof(wchar_t)));
+		}
+		else
+		{
+			RegDeleteValueW(hKey, L"AudioPlaybackConnector");
+		}
+		RegCloseKey(hKey);
+	}
+}
+
+inline void DefaultSettings()
+{
+	g_reconnect = false;
+	g_startupReconnectDevices.clear();
+	g_lostConnectionsInCurrentSession.clear();
+	g_runAtStartup = IsRunAtStartupEnabled();
+	g_autoConnectNearby = false;
+	g_preventSleepWhileStreaming = true;
+}
+
+inline void LoadSettings()
 {
 	try
 	{
 		DefaultSettings();
 
 		wil::unique_hfile hFile(CreateFileW((GetModuleFsPath(g_hInst).remove_filename() / CONFIG_NAME).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
-		THROW_LAST_ERROR_IF(!hFile);
+		if (!hFile)
+			return;
 
 		std::string string;
 		while (1)
@@ -30,32 +68,68 @@ void LoadSettings()
 				break;
 		}
 
+		if (string.empty())
+			return;
+
 		std::wstring utf16 = Utf8ToUtf16(string);
 		auto jsonObj = JsonObject::Parse(utf16);
-		g_reconnect = jsonObj.Lookup(L"reconnect").GetBoolean();
+		if (jsonObj.HasKey(L"reconnect"))
+			g_reconnect = jsonObj.Lookup(L"reconnect").GetBoolean();
 
-		auto lastDevices = jsonObj.Lookup(L"lastDevices").GetArray();
-		g_lastDevices.reserve(lastDevices.Size());
-		for (const auto& i : lastDevices)
+		if (jsonObj.HasKey(L"runAtStartup"))
+			g_runAtStartup = jsonObj.Lookup(L"runAtStartup").GetBoolean();
+		else
+			g_runAtStartup = IsRunAtStartupEnabled();
+
+		if (jsonObj.HasKey(L"autoConnectNearby"))
+			g_autoConnectNearby = jsonObj.Lookup(L"autoConnectNearby").GetBoolean();
+
+		if (jsonObj.HasKey(L"preventSleepWhileStreaming"))
+			g_preventSleepWhileStreaming = jsonObj.Lookup(L"preventSleepWhileStreaming").GetBoolean();
+
+		// Strictly only load startup devices if g_reconnect is enabled by the user!
+		if (g_reconnect && jsonObj.HasKey(L"lastDevices"))
 		{
-			if (i.ValueType() == JsonValueType::String)
-				g_lastDevices.push_back(std::wstring(i.GetString()));
+			auto lastDevices = jsonObj.Lookup(L"lastDevices").GetArray();
+			g_startupReconnectDevices.reserve(lastDevices.Size());
+			for (const auto& i : lastDevices)
+			{
+				if (i.ValueType() == JsonValueType::String)
+					g_startupReconnectDevices.push_back(std::wstring(i.GetString()));
+			}
+		}
+		else
+		{
+			g_startupReconnectDevices.clear();
 		}
 	}
 	CATCH_LOG();
 }
 
-void SaveSettings()
+inline void SaveSettings()
 {
 	try
 	{
 		JsonObject jsonObj;
 		jsonObj.Insert(L"reconnect", JsonValue::CreateBooleanValue(g_reconnect));
+		jsonObj.Insert(L"runAtStartup", JsonValue::CreateBooleanValue(g_runAtStartup));
+		jsonObj.Insert(L"autoConnectNearby", JsonValue::CreateBooleanValue(g_autoConnectNearby));
+		jsonObj.Insert(L"preventSleepWhileStreaming", JsonValue::CreateBooleanValue(g_preventSleepWhileStreaming));
 
 		JsonArray lastDevices;
-		for (const auto& i : g_audioPlaybackConnections)
+		if (g_reconnect)
 		{
-			lastDevices.Append(JsonValue::CreateStringValue(i.first));
+			for (const auto& i : g_audioPlaybackConnections)
+			{
+				lastDevices.Append(JsonValue::CreateStringValue(i.first));
+			}
+			if (g_audioPlaybackConnections.empty())
+			{
+				for (const auto& id : g_startupReconnectDevices)
+				{
+					lastDevices.Append(JsonValue::CreateStringValue(id));
+				}
+			}
 		}
 		jsonObj.Insert(L"lastDevices", lastDevices);
 

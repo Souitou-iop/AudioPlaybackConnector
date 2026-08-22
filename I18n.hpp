@@ -1,7 +1,7 @@
 #pragma once
 #include "FnvHash.hpp"
 
-std::unordered_map<uint32_t, const wchar_t*> hashToStrMap;
+inline std::unordered_map<uint32_t, const wchar_t*> hashToStrMap;
 
 #pragma pack(push, 1)
 struct YMOData
@@ -15,9 +15,47 @@ struct YMOData
 };
 #pragma pack(pop)
 
-void LoadTranslateData()
+inline void LoadTranslateData()
 {
-	auto hRes = FindResourceExW(g_hInst, L"YMO", MAKEINTRESOURCEW(1), GetThreadUILanguage());
+	if (!hashToStrMap.empty())
+		return;
+
+	HRSRC hRes = nullptr;
+	const LANGID uiLangs[] = {
+		GetThreadUILanguage(),
+		GetUserDefaultUILanguage(),
+		GetSystemDefaultUILanguage()
+	};
+
+	for (auto langId : uiLangs)
+	{
+		hRes = FindResourceExW(g_hInst, L"YMO", MAKEINTRESOURCEW(1), langId);
+		if (hRes)
+			break;
+
+		// Match by primary language if sublanguage differs
+		if (PRIMARYLANGID(langId) == LANG_CHINESE)
+		{
+			if (SUBLANGID(langId) == SUBLANG_CHINESE_TRADITIONAL ||
+				SUBLANGID(langId) == SUBLANG_CHINESE_HONGKONG ||
+				SUBLANGID(langId) == SUBLANG_CHINESE_MACAU)
+			{
+				hRes = FindResourceExW(g_hInst, L"YMO", MAKEINTRESOURCEW(1), MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_TRADITIONAL));
+			}
+			else
+			{
+				hRes = FindResourceExW(g_hInst, L"YMO", MAKEINTRESOURCEW(1), MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED));
+			}
+			if (hRes)
+				break;
+		}
+	}
+
+	if (!hRes)
+	{
+		hRes = FindResourceW(g_hInst, MAKEINTRESOURCEW(1), L"YMO");
+	}
+
 	if (hRes)
 	{
 		auto hResData = LoadResource(g_hInst, hRes);
@@ -40,7 +78,7 @@ void LoadTranslateData()
 	}
 }
 
-const wchar_t* Translate(const wchar_t* str)
+inline const wchar_t* Translate(const wchar_t* str)
 {
 	static std::unordered_map<const wchar_t*, const wchar_t*> ptrToStrMap;
 
@@ -62,7 +100,7 @@ const wchar_t* Translate(const wchar_t* str)
 	return translation;
 }
 
-const wchar_t* TranslateContext(const wchar_t* str, const wchar_t* ctxtStr)
+inline const wchar_t* TranslateContext(const wchar_t* str, const wchar_t* ctxtStr)
 {
 	auto translation = Translate(ctxtStr);
 	if (translation == ctxtStr)
