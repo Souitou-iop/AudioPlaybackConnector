@@ -39,8 +39,9 @@ inline void SetRunAtStartup(bool enable)
 inline void DefaultSettings()
 {
 	g_reconnect = false;
-	g_startupReconnectDevices.clear();
-	g_lostConnectionsInCurrentSession.clear();
+	g_startupReconnectDeviceId.clear();
+	g_lostConnectionInSession.clear();
+	g_connectingDeviceId.clear();
 	g_runAtStartup = IsRunAtStartupEnabled();
 	g_autoConnectNearby = false;
 	g_preventSleepWhileStreaming = true;
@@ -97,20 +98,22 @@ inline void LoadSettings()
 			}
 		}
 
-		// Strictly only load startup devices if g_reconnect is enabled by the user!
+		// Only load startup device if g_reconnect is enabled by the user
 		if (g_reconnect && jsonObj.HasKey(L"lastDevices"))
 		{
 			auto lastDevices = jsonObj.Lookup(L"lastDevices").GetArray();
-			g_startupReconnectDevices.reserve(lastDevices.Size());
-			for (const auto& i : lastDevices)
+			if (lastDevices.Size() > 0)
 			{
-				if (i.ValueType() == JsonValueType::String)
-					g_startupReconnectDevices.push_back(std::wstring(i.GetString()));
+				auto first = lastDevices.GetAt(0);
+				if (first.ValueType() == JsonValueType::String)
+				{
+					g_startupReconnectDeviceId = first.GetString().c_str();
+				}
 			}
 		}
 		else
 		{
-			g_startupReconnectDevices.clear();
+			g_startupReconnectDeviceId.clear();
 		}
 	}
 	CATCH_LOG();
@@ -136,16 +139,13 @@ inline void SaveSettings()
 		JsonArray lastDevices;
 		if (g_reconnect)
 		{
-			for (const auto& i : g_audioPlaybackConnections)
+			if (g_activeConnection.has_value())
 			{
-				lastDevices.Append(JsonValue::CreateStringValue(i.first));
+				lastDevices.Append(JsonValue::CreateStringValue(g_activeConnection->id));
 			}
-			if (g_audioPlaybackConnections.empty())
+			else if (!g_startupReconnectDeviceId.empty())
 			{
-				for (const auto& id : g_startupReconnectDevices)
-				{
-					lastDevices.Append(JsonValue::CreateStringValue(id));
-				}
+				lastDevices.Append(JsonValue::CreateStringValue(g_startupReconnectDeviceId));
 			}
 		}
 		jsonObj.Insert(L"lastDevices", lastDevices);
