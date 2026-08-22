@@ -44,6 +44,7 @@ inline void DefaultSettings()
 	g_runAtStartup = IsRunAtStartupEnabled();
 	g_autoConnectNearby = false;
 	g_preventSleepWhileStreaming = true;
+	g_deviceVolumes.clear();
 }
 
 inline void LoadSettings()
@@ -87,6 +88,15 @@ inline void LoadSettings()
 		if (jsonObj.HasKey(L"preventSleepWhileStreaming"))
 			g_preventSleepWhileStreaming = jsonObj.Lookup(L"preventSleepWhileStreaming").GetBoolean();
 
+		if (jsonObj.HasKey(L"deviceVolumes"))
+		{
+			auto devVols = jsonObj.Lookup(L"deviceVolumes").GetObject();
+			for (const auto& pair : devVols)
+			{
+				g_deviceVolumes[std::wstring(pair.Key())] = pair.Value().GetNumber();
+			}
+		}
+
 		// Strictly only load startup devices if g_reconnect is enabled by the user!
 		if (g_reconnect && jsonObj.HasKey(L"lastDevices"))
 		{
@@ -115,6 +125,13 @@ inline void SaveSettings()
 		jsonObj.Insert(L"runAtStartup", JsonValue::CreateBooleanValue(g_runAtStartup));
 		jsonObj.Insert(L"autoConnectNearby", JsonValue::CreateBooleanValue(g_autoConnectNearby));
 		jsonObj.Insert(L"preventSleepWhileStreaming", JsonValue::CreateBooleanValue(g_preventSleepWhileStreaming));
+
+		JsonObject devVols;
+		for (const auto& pair : g_deviceVolumes)
+		{
+			devVols.Insert(pair.first, JsonValue::CreateNumberValue(pair.second));
+		}
+		jsonObj.Insert(L"deviceVolumes", devVols);
 
 		JsonArray lastDevices;
 		if (g_reconnect)

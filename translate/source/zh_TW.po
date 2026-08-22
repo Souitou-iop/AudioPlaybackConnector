@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: AudioPlaybackConnector\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-22 22:30+0800\n"
-"PO-Revision-Date: 2026-08-22 22:30+0800\n"
+"POT-Creation-Date: 2026-08-22 23:10+0800\n"
+"PO-Revision-Date: 2026-08-22 23:10+0800\n"
 "Last-Translator: Richard Yu <yurichard3839@gmail.com>\n"
 "Language-Team: \n"
 "Language: zh_TW\n"
@@ -24,6 +24,30 @@ msgstr "AudioPlaybackConnector 不支援此作業系統版本。"
 
 msgid "AudioPlaybackConnector"
 msgstr "音訊播放連接器"
+
+msgid "Bluetooth Audio Devices"
+msgstr "藍牙音訊裝置"
+
+msgid "No Bluetooth audio devices found."
+msgstr "未找到已配對的藍牙音訊裝置。"
+
+msgid "Connect"
+msgstr "連線"
+
+msgid "Disconnect"
+msgstr "中斷"
+
+msgid "Mute"
+msgstr "靜音"
+
+msgid "Unmute"
+msgstr "取消靜音"
+
+msgid "Volume"
+msgstr "音量"
+
+msgid "Refresh"
+msgstr "重新整理"
 
 msgid "Exit"
 msgstr "結束"

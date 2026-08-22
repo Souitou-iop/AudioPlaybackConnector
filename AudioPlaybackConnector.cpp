@@ -3,9 +3,8 @@
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 void SetupMenu();
-winrt::fire_and_forget ConnectDevice(DevicePicker, std::wstring_view);
-winrt::fire_and_forget ConnectDevice(DevicePicker, DeviceInformation);
-void SetupDevicePicker();
+winrt::fire_and_forget ConnectDevice(std::wstring deviceId);
+winrt::fire_and_forget ConnectDevice(DeviceInformation device);
 void SetupSvgIcon();
 void UpdateNotifyIcon();
 void UpdateTrayTooltip();
@@ -17,6 +16,10 @@ void ToggleLastConnectedDevice();
 void UpdateAudioThreadPriority(bool enable);
 void UpdatePowerLock(bool hasConnections);
 void SetupDeviceWatcher(bool enable);
+winrt::fire_and_forget ShowDevicePanelAsync();
+void ShowDevicePanel();
+void SetDeviceVolume(std::wstring_view deviceId, float volume);
+float GetDeviceVolume(std::wstring_view deviceId);
 void ExitApp();
 
 class AudioEndpointNotificationClient : public IMMNotificationClient
@@ -125,6 +128,66 @@ void CheckAudioEndpointVolume()
 	}
 }
 
+void SetDeviceVolume(std::wstring_view deviceId, float volume)
+{
+	if (volume < 0.0f) volume = 0.0f;
+	if (volume > 1.0f) volume = 1.0f;
+	g_deviceVolumes[std::wstring(deviceId)] = volume;
+	SaveSettings();
+
+	if (!g_deviceEnumerator)
+		return;
+
+	wil::com_ptr<IMMDevice> defaultDevice;
+	if (FAILED(g_deviceEnumerator->GetDefaultAudioEndpoint(eRender, eMultimedia, defaultDevice.put())))
+		return;
+
+	wil::com_ptr<IAudioSessionManager2> sessionManager;
+	if (FAILED(defaultDevice->Activate(__uuidof(IAudioSessionManager2), CLSCTX_INPROC_SERVER, nullptr, sessionManager.put_void())))
+		return;
+
+	wil::com_ptr<IAudioSessionEnumerator> sessionEnumerator;
+	if (FAILED(sessionManager->GetSessionEnumerator(sessionEnumerator.put())))
+		return;
+
+	int count = 0;
+	sessionEnumerator->GetCount(&count);
+
+	for (int i = 0; i < count; ++i)
+	{
+		wil::com_ptr<IAudioSessionControl> control;
+		if (FAILED(sessionEnumerator->GetSession(i, control.put())))
+			continue;
+
+		wil::com_ptr<IAudioSessionControl2> control2;
+		if (SUCCEEDED(control->QueryInterface(__uuidof(IAudioSessionControl2), control2.put_void())))
+		{
+			DWORD pid = 0;
+			control2->GetProcessId(&pid);
+
+			// Target audio session for Bluetooth stream
+			if (pid == GetCurrentProcessId() || pid == 0)
+			{
+				wil::com_ptr<ISimpleAudioVolume> simpleVol;
+				if (SUCCEEDED(control->QueryInterface(__uuidof(ISimpleAudioVolume), simpleVol.put_void())))
+				{
+					simpleVol->SetMasterVolume(volume, nullptr);
+				}
+			}
+		}
+	}
+}
+
+float GetDeviceVolume(std::wstring_view deviceId)
+{
+	auto it = g_deviceVolumes.find(std::wstring(deviceId));
+	if (it != g_deviceVolumes.end())
+	{
+		return static_cast<float>(it->second);
+	}
+	return 1.0f; // Default 100%
+}
+
 typedef HANDLE(WINAPI* PFN_AvSetMmThreadCharacteristicsW)(LPCWSTR, LPDWORD);
 typedef BOOL(WINAPI* PFN_AvRevertMmThreadCharacteristics)(HANDLE);
 
@@ -182,7 +245,7 @@ void SetupDeviceWatcher(bool enable)
 		{
 			g_deviceWatcher = DeviceInformation::CreateWatcher(AudioPlaybackConnection::GetDeviceSelector());
 			g_deviceWatcher.Added([](const DeviceWatcher&, const DeviceInformation& device) {
-				// Only auto-reconnect if this device was previously connected in current session and then dropped
+				// Only auto-reconnect if this device was active in the current session and dropped
 				if (g_autoConnectNearby && !g_lostConnectionsInCurrentSession.empty())
 				{
 					auto it = g_audioPlaybackConnections.find(std::wstring(device.Id()));
@@ -190,7 +253,7 @@ void SetupDeviceWatcher(bool enable)
 					{
 						if (g_lostConnectionsInCurrentSession.find(std::wstring(device.Id())) != g_lostConnectionsInCurrentSession.end())
 						{
-							ConnectDevice(g_devicePicker, device);
+							ConnectDevice(device);
 						}
 					}
 				}
@@ -203,7 +266,7 @@ void SetupDeviceWatcher(bool enable)
 					{
 						if (g_lostConnectionsInCurrentSession.find(std::wstring(update.Id())) != g_lostConnectionsInCurrentSession.end())
 						{
-							ConnectDevice(g_devicePicker, update.Id());
+							ConnectDevice(std::wstring(update.Id()));
 						}
 					}
 				}
@@ -228,45 +291,325 @@ void ToggleLastConnectedDevice()
 		for (const auto& connection : g_audioPlaybackConnections)
 		{
 			try { connection.second.connection.Close(); } catch (...) {}
-			g_devicePicker.SetDisplayStatus(connection.second.device, {}, DevicePickerDisplayStatusOptions::None);
 		}
 		g_audioPlaybackConnections.clear();
 		UpdateTrayTooltip();
 		UpdateAudioThreadPriority(false);
 		UpdatePowerLock(false);
+		PostMessageW(g_hWnd, WM_UPDATE_DEVICE_PANEL, 0, 0);
 	}
 	else
 	{
 		for (const auto& id : g_startupReconnectDevices)
 		{
-			ConnectDevice(g_devicePicker, id);
+			ConnectDevice(id);
 		}
 	}
 }
 
 void ExitApp()
 {
-	// 1. Immediately remove tray icon and hide window (0ms instant visual response)
 	Shell_NotifyIconW(NIM_DELETE, &g_nid);
 	if (g_hWnd && IsWindow(g_hWnd))
 	{
 		ShowWindow(g_hWnd, SW_HIDE);
 	}
-
-	// 2. Persist settings
 	SaveSettings();
+	ExitProcess(0);
+}
 
-	// 3. Cleanly close audio connections and reset picker display status
-	for (const auto& connection : g_audioPlaybackConnections)
+winrt::fire_and_forget ShowDevicePanelAsync()
+{
+	RECT iconRect;
+	auto hr = Shell_NotifyIconGetRect(&g_niid, &iconRect);
+	if (FAILED(hr))
 	{
-		try { connection.second.connection.Close(); } catch (...) {}
-		if (g_devicePicker)
+		LOG_HR(hr);
+		co_return;
+	}
+
+	auto dpi = GetDpiForWindow(g_hWnd);
+	SetWindowPos(g_hWnd, HWND_TOPMOST, iconRect.left, iconRect.top, 0, 0, SWP_HIDEWINDOW);
+	g_xamlCanvas.Width(static_cast<float>((iconRect.right - iconRect.left) * USER_DEFAULT_SCREEN_DPI / dpi));
+	g_xamlCanvas.Height(static_cast<float>((iconRect.bottom - iconRect.top) * USER_DEFAULT_SCREEN_DPI / dpi));
+
+	// Query paired Bluetooth devices
+	auto devices = co_await DeviceInformation::FindAllAsync(AudioPlaybackConnection::GetDeviceSelector());
+
+	// Root Container
+	Border rootBorder;
+	rootBorder.Width(340);
+	rootBorder.Padding({ 16, 16, 16, 16 });
+
+	StackPanel rootPanel;
+
+	// Header: Title + Refresh Button
+	Grid headerGrid;
+	ColumnDefinition colTitle;
+	ColumnDefinition colRefresh;
+	colRefresh.Width(GridLength{ 0, GridUnitType::Auto });
+	headerGrid.ColumnDefinitions().Append(colTitle);
+	headerGrid.ColumnDefinitions().Append(colRefresh);
+
+	TextBlock headerText;
+	headerText.Text(_(L"Bluetooth Audio Devices"));
+	headerText.FontSize(15);
+	headerText.FontWeight(winrt::Windows::UI::Text::FontWeights::SemiBold());
+	headerText.VerticalAlignment(VerticalAlignment::Center);
+	Grid::SetColumn(headerText, 0);
+	headerGrid.Children().Append(headerText);
+
+	Button refreshBtn;
+	FontIcon refreshIcon;
+	refreshIcon.Glyph(L"\xE72C");
+	refreshIcon.FontSize(12);
+	refreshBtn.Content(refreshIcon);
+	refreshBtn.Padding({ 6, 6, 6, 6 });
+	refreshBtn.Click([](const auto&, const auto&) {
+		ShowDevicePanelAsync();
+	});
+	Grid::SetColumn(refreshBtn, 1);
+	headerGrid.Children().Append(refreshBtn);
+
+	rootPanel.Children().Append(headerGrid);
+
+	// Separator
+	Border separatorTop;
+	separatorTop.Height(1);
+	separatorTop.Margin({ 0, 10, 0, 10 });
+	separatorTop.Opacity(0.2);
+	separatorTop.Background(Application::Current().Resources().TryLookup(winrt::box_value(L"SystemControlForegroundBaseHighBrush")).as<Brush>());
+	rootPanel.Children().Append(separatorTop);
+
+	// Device List in ScrollViewer
+	ScrollViewer scrollViewer;
+	scrollViewer.MaxHeight(360);
+	scrollViewer.VerticalScrollBarVisibility(ScrollBarVisibility::Auto);
+
+	StackPanel deviceListPanel;
+
+	if (devices.Size() == 0)
+	{
+		TextBlock emptyText;
+		emptyText.Text(_(L"No Bluetooth audio devices found."));
+		emptyText.Opacity(0.6);
+		emptyText.Margin({ 0, 16, 0, 16 });
+		emptyText.HorizontalAlignment(HorizontalAlignment::Center);
+		deviceListPanel.Children().Append(emptyText);
+	}
+	else
+	{
+		for (const auto& dev : devices)
 		{
-			try { g_devicePicker.SetDisplayStatus(connection.second.device, {}, DevicePickerDisplayStatusOptions::None); } catch (...) {}
+			std::wstring devId = dev.Id().c_str();
+			std::wstring devName = dev.Name().c_str();
+			bool isConnected = (g_audioPlaybackConnections.find(devId) != g_audioPlaybackConnections.end());
+			bool isConnecting = (g_connectingDeviceIds.find(devId) != g_connectingDeviceIds.end());
+
+			// Card Border
+			Border cardBorder;
+			cardBorder.CornerRadius(CornerRadius{ 6, 6, 6, 6 });
+			cardBorder.Padding({ 12, 10, 12, 10 });
+			cardBorder.Margin({ 0, 4, 0, 4 });
+			cardBorder.Background(Application::Current().Resources().TryLookup(winrt::box_value(L"SystemControlBackgroundAltMediumLowBrush")).as<Brush>());
+
+			StackPanel cardStack;
+
+			// Card Top Row: Icon + Name + Action Button
+			Grid topGrid;
+			ColumnDefinition colIcon, colName, colAction;
+			colIcon.Width(GridLength{ 28, GridUnitType::Pixel });
+			colAction.Width(GridLength{ 0, GridUnitType::Auto });
+			topGrid.ColumnDefinitions().Append(colIcon);
+			topGrid.ColumnDefinitions().Append(colName);
+			topGrid.ColumnDefinitions().Append(colAction);
+
+			FontIcon phoneIcon;
+			phoneIcon.Glyph(L"\xE8EA");
+			phoneIcon.FontSize(16);
+			phoneIcon.VerticalAlignment(VerticalAlignment::Center);
+			Grid::SetColumn(phoneIcon, 0);
+			topGrid.Children().Append(phoneIcon);
+
+			StackPanel namePanel;
+			namePanel.VerticalAlignment(VerticalAlignment::Center);
+			namePanel.Margin({ 4, 0, 8, 0 });
+
+			TextBlock nameText;
+			nameText.Text(devName);
+			nameText.FontWeight(winrt::Windows::UI::Text::FontWeights::Medium());
+			nameText.TextTrimming(TextTrimming::CharacterEllipsis);
+			namePanel.Children().Append(nameText);
+
+			if (isConnected)
+			{
+				TextBlock statusText;
+				statusText.Text(_(L"Connected"));
+				statusText.FontSize(11);
+				statusText.Opacity(0.7);
+				namePanel.Children().Append(statusText);
+			}
+			Grid::SetColumn(namePanel, 1);
+			topGrid.Children().Append(namePanel);
+
+			// Action Button / Progress
+			if (isConnecting)
+			{
+				ProgressRing ring;
+				ring.IsActive(true);
+				ring.Width(20);
+				ring.Height(20);
+				Grid::SetColumn(ring, 2);
+				topGrid.Children().Append(ring);
+			}
+			else if (isConnected)
+			{
+				Button disconnectBtn;
+				disconnectBtn.Content(winrt::box_value(_(L"Disconnect")));
+				disconnectBtn.Padding({ 10, 4, 10, 4 });
+				disconnectBtn.Click([devId](const auto&, const auto&) {
+					auto it = g_audioPlaybackConnections.find(devId);
+					if (it != g_audioPlaybackConnections.end())
+					{
+						try { it->second.connection.Close(); } catch (...) {}
+						g_audioPlaybackConnections.erase(it);
+					}
+					g_lostConnectionsInCurrentSession.erase(devId);
+					SaveSettings();
+					UpdateTrayTooltip();
+					UpdateAudioThreadPriority(!g_audioPlaybackConnections.empty());
+					UpdatePowerLock(!g_audioPlaybackConnections.empty());
+					ShowDevicePanelAsync();
+				});
+				Grid::SetColumn(disconnectBtn, 2);
+				topGrid.Children().Append(disconnectBtn);
+			}
+			else
+			{
+				Button connectBtn;
+				connectBtn.Content(winrt::box_value(_(L"Connect")));
+				connectBtn.Style(Application::Current().Resources().TryLookup(winrt::box_value(L"AccentButtonStyle")).as<Style>());
+				connectBtn.Padding({ 14, 4, 14, 4 });
+				connectBtn.Click([dev](const auto&, const auto&) {
+					ConnectDevice(dev);
+					ShowDevicePanelAsync();
+				});
+				Grid::SetColumn(connectBtn, 2);
+				topGrid.Children().Append(connectBtn);
+			}
+
+			cardStack.Children().Append(topGrid);
+
+			// Card Bottom Row: Volume Slider (Only visible when connected!)
+			if (isConnected)
+			{
+				Grid volGrid;
+				volGrid.Margin({ 0, 8, 0, 0 });
+
+				ColumnDefinition colVolIcon, colSlider, colVolVal;
+				colVolIcon.Width(GridLength{ 28, GridUnitType::Pixel });
+				colVolVal.Width(GridLength{ 40, GridUnitType::Pixel });
+				volGrid.ColumnDefinitions().Append(colVolIcon);
+				volGrid.ColumnDefinitions().Append(colSlider);
+				volGrid.ColumnDefinitions().Append(colVolVal);
+
+				float currentVol = GetDeviceVolume(devId);
+				int volPercent = static_cast<int>(currentVol * 100.0f + 0.5f);
+
+				FontIcon volIcon;
+				volIcon.Glyph(volPercent == 0 ? L"\xE74F" : L"\xE767");
+				volIcon.FontSize(14);
+				volIcon.VerticalAlignment(VerticalAlignment::Center);
+				Grid::SetColumn(volIcon, 0);
+				volGrid.Children().Append(volIcon);
+
+				TextBlock volValText;
+				wchar_t volBuf[16];
+				swprintf_s(volBuf, L"%d%%", volPercent);
+				volValText.Text(volBuf);
+				volValText.FontSize(12);
+				volValText.VerticalAlignment(VerticalAlignment::Center);
+				volValText.HorizontalAlignment(HorizontalAlignment::Right);
+				volValText.Opacity(0.8);
+				Grid::SetColumn(volValText, 2);
+				volGrid.Children().Append(volValText);
+
+				Slider slider;
+				slider.Minimum(0);
+				slider.Maximum(100);
+				slider.Value(volPercent);
+				slider.Margin({ 4, 0, 4, 0 });
+				slider.VerticalAlignment(VerticalAlignment::Center);
+
+				slider.ValueChanged([devId, volValText, volIcon](const auto& /*sender*/, const auto& args) {
+					int newPercent = static_cast<int>(args.NewValue());
+					float newVol = newPercent / 100.0f;
+					SetDeviceVolume(devId, newVol);
+
+					wchar_t buf[16];
+					swprintf_s(buf, L"%d%%", newPercent);
+					volValText.Text(buf);
+					volIcon.Glyph(newPercent == 0 ? L"\xE74F" : L"\xE767");
+				});
+				Grid::SetColumn(slider, 1);
+				volGrid.Children().Append(slider);
+
+				cardStack.Children().Append(volGrid);
+			}
+
+			cardBorder.Child(cardStack);
+			deviceListPanel.Children().Append(cardBorder);
 		}
 	}
 
-	ExitProcess(0);
+	scrollViewer.Content(deviceListPanel);
+	rootPanel.Children().Append(scrollViewer);
+
+	// Footer: Links to Bluetooth & Sound Settings
+	Border separatorBottom;
+	separatorBottom.Height(1);
+	separatorBottom.Margin({ 0, 10, 0, 8 });
+	separatorBottom.Opacity(0.2);
+	separatorBottom.Background(Application::Current().Resources().TryLookup(winrt::box_value(L"SystemControlForegroundBaseHighBrush")).as<Brush>());
+	rootPanel.Children().Append(separatorBottom);
+
+	StackPanel footerPanel;
+	footerPanel.Orientation(Orientation::Horizontal);
+	footerPanel.HorizontalAlignment(HorizontalAlignment::Right);
+
+	HyperlinkButton soundLink;
+	soundLink.Content(winrt::box_value(_(L"Sound Settings")));
+	soundLink.Margin({ 0, 0, 8, 0 });
+	soundLink.Click([](const auto&, const auto&) {
+		winrt::Windows::System::Launcher::LaunchUriAsync(Uri(L"ms-settings:sound"));
+	});
+	footerPanel.Children().Append(soundLink);
+
+	HyperlinkButton btLink;
+	btLink.Content(winrt::box_value(_(L"Bluetooth Settings")));
+	btLink.Click([](const auto&, const auto&) {
+		winrt::Windows::System::Launcher::LaunchUriAsync(Uri(L"ms-settings:bluetooth"));
+	});
+	footerPanel.Children().Append(btLink);
+
+	rootPanel.Children().Append(footerPanel);
+
+	rootBorder.Child(rootPanel);
+
+	Flyout flyout;
+	flyout.Content(rootBorder);
+	flyout.ShouldConstrainToRootBounds(false);
+	flyout.Closed([](const auto&, const auto&) {
+		ShowWindow(g_hWnd, SW_HIDE);
+	});
+
+	g_deviceFlyout = flyout;
+	g_deviceFlyout.ShowAt(g_xamlCanvas);
+}
+
+void ShowDevicePanel()
+{
+	ShowDevicePanelAsync();
 }
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
@@ -332,7 +675,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	LoadSettings();
 	SetupDeviceWatcher(g_autoConnectNearby);
 	SetupMenu();
-	SetupDevicePicker();
 	SetupSvgIcon();
 
 	g_nid.hWnd = g_niid.hWnd = g_hWnd;
@@ -390,30 +732,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			break;
 		case NIN_SELECT:
 		case NIN_KEYSELECT:
-		{
-			using namespace winrt::Windows::UI::Popups;
-
-			RECT iconRect;
-			auto hr = Shell_NotifyIconGetRect(&g_niid, &iconRect);
-			if (FAILED(hr))
-			{
-				LOG_HR(hr);
-				break;
-			}
-
-			auto dpi = GetDpiForWindow(hWnd);
-			Rect rect = {
-				static_cast<float>(iconRect.left * USER_DEFAULT_SCREEN_DPI / dpi),
-				static_cast<float>(iconRect.top * USER_DEFAULT_SCREEN_DPI / dpi),
-				static_cast<float>((iconRect.right - iconRect.left) * USER_DEFAULT_SCREEN_DPI / dpi),
-				static_cast<float>((iconRect.bottom - iconRect.top) * USER_DEFAULT_SCREEN_DPI / dpi)
-			};
-
-			SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), SWP_HIDEWINDOW);
-			SetForegroundWindow(hWnd);
-			g_devicePicker.Show(rect, Placement::Above);
-		}
-		break;
+			ShowDevicePanel();
+			break;
 		case WM_RBUTTONUP: // Menu activated by mouse click
 			g_menuFocusState = FocusState::Pointer;
 			break;
@@ -442,7 +762,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			for (const auto& i : g_startupReconnectDevices)
 			{
-				ConnectDevice(g_devicePicker, i);
+				ConnectDevice(i);
 			}
 			g_startupReconnectDevices.clear();
 		}
@@ -581,18 +901,21 @@ void SetupMenu()
 	g_xamlMenu = menu;
 }
 
-winrt::fire_and_forget ConnectDevice(DevicePicker picker, DeviceInformation device)
+winrt::fire_and_forget ConnectDevice(DeviceInformation device)
 {
-	picker.SetDisplayStatus(device, _(L"Connecting"), DevicePickerDisplayStatusOptions::ShowProgress | DevicePickerDisplayStatusOptions::ShowDisconnectButton);
+	std::wstring deviceId = device.Id().c_str();
+	std::wstring deviceName = device.Name().c_str();
+
+	g_connectingDeviceIds.insert(deviceId);
+	ShowDevicePanelAsync();
 
 	bool success = false;
 	std::wstring errorMessage;
-	std::wstring deviceName = device.Name().c_str();
 
 	try
 	{
 		// Clean up existing connection for this device if present
-		auto existingIt = g_audioPlaybackConnections.find(std::wstring(device.Id()));
+		auto existingIt = g_audioPlaybackConnections.find(deviceId);
 		if (existingIt != g_audioPlaybackConnections.end())
 		{
 			try { existingIt->second.connection.Close(); } catch (...) {}
@@ -604,7 +927,7 @@ winrt::fire_and_forget ConnectDevice(DevicePicker picker, DeviceInformation devi
 		auto connection = AudioPlaybackConnection::TryCreateFromId(device.Id());
 		if (connection)
 		{
-			g_audioPlaybackConnections.insert_or_assign(std::wstring(device.Id()), ConnectedDeviceInfo{ device, connection, deviceName });
+			g_audioPlaybackConnections.insert_or_assign(deviceId, ConnectedDeviceInfo{ device, connection, deviceName });
 
 			connection.StateChanged([](const auto& sender, const auto&) {
 				if (sender.State() == AudioPlaybackConnectionState::Closed)
@@ -612,9 +935,7 @@ winrt::fire_and_forget ConnectDevice(DevicePicker picker, DeviceInformation devi
 					auto it = g_audioPlaybackConnections.find(std::wstring(sender.DeviceId()));
 					if (it != g_audioPlaybackConnections.end())
 					{
-						// Remember in session's lost list so that if user walks back, DeviceWatcher auto-reconnects
 						g_lostConnectionsInCurrentSession.insert(std::wstring(sender.DeviceId()));
-						g_devicePicker.SetDisplayStatus(it->second.device, {}, DevicePickerDisplayStatusOptions::None);
 						g_audioPlaybackConnections.erase(it);
 						UpdateTrayTooltip();
 						UpdateAudioThreadPriority(!g_audioPlaybackConnections.empty());
@@ -655,52 +976,44 @@ winrt::fire_and_forget ConnectDevice(DevicePicker picker, DeviceInformation devi
 	catch (winrt::hresult_error const& ex)
 	{
 		success = false;
-		errorMessage.resize(64);
-		while (1)
-		{
-			auto result = swprintf(errorMessage.data(), errorMessage.size(), L"%s (0x%08X)", ex.message().c_str(), static_cast<uint32_t>(ex.code()));
-			if (result < 0)
-			{
-				errorMessage.resize(errorMessage.size() * 2);
-			}
-			else
-			{
-				errorMessage.resize(result);
-				break;
-			}
-		}
+		errorMessage = ex.message().c_str();
 		LOG_CAUGHT_EXCEPTION();
 	}
 
+	g_connectingDeviceIds.erase(deviceId);
+
 	if (success)
 	{
-		picker.SetDisplayStatus(device, _(L"Connected"), DevicePickerDisplayStatusOptions::ShowDisconnectButton);
-		// Connected successfully -> remove from lost list
-		g_lostConnectionsInCurrentSession.erase(std::wstring(device.Id()));
+		g_lostConnectionsInCurrentSession.erase(deviceId);
 		SaveSettings();
 		UpdateTrayTooltip();
 		UpdateAudioThreadPriority(true);
 		UpdatePowerLock(true);
+
+		// Restore saved volume level
+		float savedVol = GetDeviceVolume(deviceId);
+		SetDeviceVolume(deviceId, savedVol);
 	}
 	else
 	{
-		auto it = g_audioPlaybackConnections.find(std::wstring(device.Id()));
+		auto it = g_audioPlaybackConnections.find(deviceId);
 		if (it != g_audioPlaybackConnections.end())
 		{
 			try { it->second.connection.Close(); } catch (...) {}
 			g_audioPlaybackConnections.erase(it);
 		}
-		picker.SetDisplayStatus(device, errorMessage, DevicePickerDisplayStatusOptions::ShowRetryButton);
 		UpdateTrayTooltip();
 		UpdateAudioThreadPriority(!g_audioPlaybackConnections.empty());
 		UpdatePowerLock(!g_audioPlaybackConnections.empty());
 	}
+
+	ShowDevicePanelAsync();
 }
 
-winrt::fire_and_forget ConnectDevice(DevicePicker picker, std::wstring_view deviceId)
+winrt::fire_and_forget ConnectDevice(std::wstring deviceId)
 {
 	auto device = co_await DeviceInformation::CreateFromIdAsync(deviceId);
-	ConnectDevice(picker, device);
+	ConnectDevice(device);
 }
 
 void ReopenAudioConnections()
@@ -717,38 +1030,8 @@ void ReopenAudioConnections()
 
 	for (const auto& dev : devices)
 	{
-		ConnectDevice(g_devicePicker, dev);
+		ConnectDevice(dev);
 	}
-}
-
-void SetupDevicePicker()
-{
-	g_devicePicker = DevicePicker();
-	winrt::check_hresult(g_devicePicker.as<IInitializeWithWindow>()->Initialize(g_hWnd));
-
-	g_devicePicker.Filter().SupportedDeviceSelectors().Append(AudioPlaybackConnection::GetDeviceSelector());
-	g_devicePicker.DevicePickerDismissed([](const auto&, const auto&) {
-		SetWindowPos(g_hWnd, nullptr, 0, 0, 0, 0, SWP_NOZORDER | SWP_HIDEWINDOW);
-	});
-	g_devicePicker.DeviceSelected([](const auto& sender, const auto& args) {
-		ConnectDevice(sender, args.SelectedDevice());
-	});
-	g_devicePicker.DisconnectButtonClicked([](const auto& sender, const auto& args) {
-		auto device = args.Device();
-		auto it = g_audioPlaybackConnections.find(std::wstring(device.Id()));
-		if (it != g_audioPlaybackConnections.end())
-		{
-			try { it->second.connection.Close(); } catch (...) {}
-			g_audioPlaybackConnections.erase(it);
-		}
-		// Explicit manual disconnect by user -> remove from lost list & reset status
-		g_lostConnectionsInCurrentSession.erase(std::wstring(device.Id()));
-		SaveSettings();
-		sender.SetDisplayStatus(device, {}, DevicePickerDisplayStatusOptions::None);
-		UpdateTrayTooltip();
-		UpdateAudioThreadPriority(!g_audioPlaybackConnections.empty());
-		UpdatePowerLock(!g_audioPlaybackConnections.empty());
-	});
 }
 
 void SetupSvgIcon()

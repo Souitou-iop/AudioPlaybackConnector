@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: AudioPlaybackConnector\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-22 22:30+0800\n"
+"POT-Creation-Date: 2026-08-22 23:10+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -23,6 +23,30 @@ msgid "AudioPlaybackConnector is not supported on this operating system version.
 msgstr ""
 
 msgid "AudioPlaybackConnector"
+msgstr ""
+
+msgid "Bluetooth Audio Devices"
+msgstr ""
+
+msgid "No Bluetooth audio devices found."
+msgstr ""
+
+msgid "Connect"
+msgstr ""
+
+msgid "Disconnect"
+msgstr ""
+
+msgid "Mute"
+msgstr ""
+
+msgid "Unmute"
+msgstr ""
+
+msgid "Volume"
+msgstr ""
+
+msgid "Refresh"
 msgstr ""
 
 msgid "Exit"
