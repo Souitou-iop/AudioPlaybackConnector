@@ -61,13 +61,13 @@ public:
 	{
 		if (flow == eRender && (role == eMultimedia || role == eConsole))
 		{
-			// Only trigger re-route if the actual default audio endpoint ID has genuinely changed
 			if (pwstrDefaultDeviceId)
 			{
 				std::wstring newId = pwstrDefaultDeviceId;
-				if (newId != g_currentDefaultAudioEndpointId)
+				if (!g_currentDefaultAudioEndpointId.empty() && newId != g_currentDefaultAudioEndpointId)
 				{
 					g_currentDefaultAudioEndpointId = newId;
+					// Default render device truly changed (e.g. plugged headphones)
 					if (m_hWnd && IsWindow(m_hWnd))
 					{
 						PostMessageW(m_hWnd, WM_DEFAULT_AUDIO_DEVICE_CHANGED, 0, 0);
@@ -184,7 +184,6 @@ void SetDeviceVolume(std::wstring_view deviceId, float volume)
 			DWORD pid = 0;
 			control2->GetProcessId(&pid);
 
-			// Target Bluetooth audio stream session
 			if (pid == GetCurrentProcessId() || pid == 0)
 			{
 				wil::com_ptr<ISimpleAudioVolume> simpleVol;
@@ -264,7 +263,6 @@ void SetupDeviceWatcher(bool enable)
 		{
 			g_deviceWatcher = DeviceInformation::CreateWatcher(AudioPlaybackConnection::GetDeviceSelector());
 			g_deviceWatcher.Added([](const DeviceWatcher&, const DeviceInformation& device) {
-				// Only auto-reconnect if this device was active in the current session and dropped
 				if (g_autoConnectNearby && !g_lostConnectionsInCurrentSession.empty())
 				{
 					auto it = g_audioPlaybackConnections.find(std::wstring(device.Id()));
@@ -933,7 +931,7 @@ winrt::fire_and_forget ConnectDevice(DeviceInformation device)
 
 	try
 	{
-		// Clean up existing connection for this device if present
+		// Clean up existing connection for this specific device if present
 		auto existingIt = g_audioPlaybackConnections.find(deviceId);
 		if (existingIt != g_audioPlaybackConnections.end())
 		{
@@ -948,20 +946,19 @@ winrt::fire_and_forget ConnectDevice(DeviceInformation device)
 		{
 			g_audioPlaybackConnections.insert_or_assign(deviceId, ConnectedDeviceInfo{ device, connection, deviceName });
 
-			connection.StateChanged([](const auto& sender, const auto&) {
+			connection.StateChanged([deviceId](const auto& sender, const auto&) {
 				if (sender.State() == AudioPlaybackConnectionState::Closed)
 				{
-					auto it = g_audioPlaybackConnections.find(std::wstring(sender.DeviceId()));
+					auto it = g_audioPlaybackConnections.find(deviceId);
 					if (it != g_audioPlaybackConnections.end())
 					{
-						g_lostConnectionsInCurrentSession.insert(std::wstring(sender.DeviceId()));
+						g_lostConnectionsInCurrentSession.insert(deviceId);
 						g_audioPlaybackConnections.erase(it);
 						UpdateTrayTooltip();
 						UpdateAudioThreadPriority(!g_audioPlaybackConnections.empty());
 						UpdatePowerLock(!g_audioPlaybackConnections.empty());
 						PostMessageW(g_hWnd, WM_UPDATE_DEVICE_PANEL, 0, 0);
 					}
-					try { sender.Close(); } catch (...) {}
 				}
 			});
 
