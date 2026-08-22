@@ -642,19 +642,22 @@ winrt::fire_and_forget RefreshDevicePanelAsync(bool forceReopen)
 
 		StackPanel rootPanel;
 
-		// Header: Title + Capacity Badge + Disconnect All (if multi-device) + Refresh Button
+				// Header: Title + Capacity Badge + Disconnect All (if multi-device) + Refresh Button + Close Button
 		Grid headerGrid;
 		ColumnDefinition colTitle;
 		ColumnDefinition colBadge;
 		ColumnDefinition colDisconnectAll;
 		ColumnDefinition colRefresh;
+		ColumnDefinition colClose;
 		colBadge.Width(GridLength{ 0, GridUnitType::Auto });
 		colDisconnectAll.Width(GridLength{ 0, GridUnitType::Auto });
 		colRefresh.Width(GridLength{ 0, GridUnitType::Auto });
+		colClose.Width(GridLength{ 0, GridUnitType::Auto });
 		headerGrid.ColumnDefinitions().Append(colTitle);
 		headerGrid.ColumnDefinitions().Append(colBadge);
 		headerGrid.ColumnDefinitions().Append(colDisconnectAll);
 		headerGrid.ColumnDefinitions().Append(colRefresh);
+		headerGrid.ColumnDefinitions().Append(colClose);
 
 		TextBlock headerText;
 		headerText.Text(_(L"Bluetooth Audio Devices"));
@@ -679,7 +682,7 @@ winrt::fire_and_forget RefreshDevicePanelAsync(bool forceReopen)
 		discAllBtn.Content(winrt::box_value(_(L"Disconnect all")));
 		discAllBtn.FontSize(11);
 		discAllBtn.Padding({ 8, 4, 8, 4 });
-		discAllBtn.Margin({ 0, 0, 6, 0 });
+		discAllBtn.Margin({ 0, 0, 4, 0 });
 		discAllBtn.Click([](const auto&, const auto&) {
 			DisconnectAllDevices();
 		});
@@ -692,12 +695,28 @@ winrt::fire_and_forget RefreshDevicePanelAsync(bool forceReopen)
 		refreshIcon.FontSize(12);
 		refreshBtn.Content(refreshIcon);
 		refreshBtn.Padding({ 6, 6, 6, 6 });
+		refreshBtn.Margin({ 0, 0, 4, 0 });
 		refreshBtn.Click([](const auto&, const auto&) {
 			g_deviceErrorMessages.clear();
 			RefreshDevicePanelAsync(false);
 		});
 		Grid::SetColumn(refreshBtn, 3);
 		headerGrid.Children().Append(refreshBtn);
+
+		Button closeBtn;
+		FontIcon closeIcon;
+		closeIcon.Glyph(L"\xE8BB");
+		closeIcon.FontSize(11);
+		closeBtn.Content(closeIcon);
+		closeBtn.Padding({ 6, 6, 6, 6 });
+		closeBtn.Click([](const auto&, const auto&) {
+			if (g_deviceFlyout)
+			{
+				g_deviceFlyout.Hide();
+			}
+		});
+		Grid::SetColumn(closeBtn, 4);
+		headerGrid.Children().Append(closeBtn);
 
 		rootPanel.Children().Append(headerGrid);
 
