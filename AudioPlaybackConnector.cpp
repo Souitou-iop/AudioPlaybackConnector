@@ -309,6 +309,7 @@ void DisconnectAllDevices()
 	}
 	g_audioPlaybackConnections.clear();
 	g_lostConnectionsInCurrentSession.clear();
+	g_deviceErrorMessages.clear();
 	SaveSettings();
 	UpdateTrayTooltip();
 	UpdateAudioThreadPriority(false);
@@ -364,6 +365,7 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 		std::wstring devName = dev.Name().c_str();
 		bool isConnected = (g_audioPlaybackConnections.find(devId) != g_audioPlaybackConnections.end());
 		bool isConnecting = (g_connectingDeviceIds.find(devId) != g_connectingDeviceIds.end());
+		bool hasError = (g_deviceErrorMessages.find(devId) != g_deviceErrorMessages.end());
 
 		// Card Border
 		Border cardBorder;
@@ -409,6 +411,16 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 			statusText.Opacity(0.7);
 			namePanel.Children().Append(statusText);
 		}
+		else if (hasError)
+		{
+			TextBlock errorText;
+			errorText.Text(g_deviceErrorMessages[devId]);
+			errorText.FontSize(11);
+			errorText.Foreground(SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0xE7, 0x48, 0x56 }));
+			errorText.TextWrapping(TextWrapping::Wrap);
+			namePanel.Children().Append(errorText);
+		}
+
 		Grid::SetColumn(namePanel, 1);
 		topGrid.Children().Append(namePanel);
 
@@ -430,7 +442,6 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 			disconnectBtn.Click([devId](const auto&, const auto&) {
 				if (g_multiDeviceMode && g_audioPlaybackConnections.size() > 1)
 				{
-					// In multi-device mode, cleanly disconnect all to prevent radio reset race conditions
 					DisconnectAllDevices();
 				}
 				else
@@ -442,6 +453,7 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 						g_audioPlaybackConnections.erase(it);
 					}
 					g_lostConnectionsInCurrentSession.erase(devId);
+					g_deviceErrorMessages.erase(devId);
 					SaveSettings();
 					UpdateTrayTooltip();
 					UpdateAudioThreadPriority(!g_audioPlaybackConnections.empty());
@@ -457,7 +469,15 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 			Button connectBtn;
 			connectBtn.Content(winrt::box_value(_(L"Connect")));
 			connectBtn.Padding({ 14, 5, 14, 5 });
-			connectBtn.Click([dev](const auto&, const auto&) {
+			connectBtn.Click([dev, devId](const auto&, const auto&) {
+				// Hardware capacity check for Multi-device mode
+				if (g_multiDeviceMode && g_audioPlaybackConnections.size() >= 2 && g_audioPlaybackConnections.find(devId) == g_audioPlaybackConnections.end())
+				{
+					g_deviceErrorMessages[devId] = _(L"Hardware limit reached (Max 2 devices). Please disconnect one first.");
+					RefreshDevicePanelAsync(false);
+					return;
+				}
+				g_deviceErrorMessages.erase(devId);
 				ConnectDevice(dev);
 			});
 			Grid::SetColumn(connectBtn, 2);
@@ -564,19 +584,22 @@ winrt::fire_and_forget RefreshDevicePanelAsync(bool forceReopen)
 
 		// Root Container Border
 		Border rootBorder;
-		rootBorder.Width(330);
+		rootBorder.Width(340);
 		rootBorder.Padding({ 16, 14, 16, 14 });
 
 		StackPanel rootPanel;
 
-		// Header: Title + Disconnect All (if multi-device) + Refresh Button
+		// Header: Title + Capacity Badge + Disconnect All (if multi-device) + Refresh Button
 		Grid headerGrid;
 		ColumnDefinition colTitle;
+		ColumnDefinition colBadge;
 		ColumnDefinition colDisconnectAll;
 		ColumnDefinition colRefresh;
+		colBadge.Width(GridLength{ 0, GridUnitType::Auto });
 		colDisconnectAll.Width(GridLength{ 0, GridUnitType::Auto });
 		colRefresh.Width(GridLength{ 0, GridUnitType::Auto });
 		headerGrid.ColumnDefinitions().Append(colTitle);
+		headerGrid.ColumnDefinitions().Append(colBadge);
 		headerGrid.ColumnDefinitions().Append(colDisconnectAll);
 		headerGrid.ColumnDefinitions().Append(colRefresh);
 
@@ -588,6 +611,29 @@ winrt::fire_and_forget RefreshDevicePanelAsync(bool forceReopen)
 		Grid::SetColumn(headerText, 0);
 		headerGrid.Children().Append(headerText);
 
+		// Dynamic capacity badge
+		TextBlock badgeText;
+		wchar_t badgeBuf[32];
+		int maxCap = GetMaxSupportedA2dpStreams();
+		size_t curConn = g_audioPlaybackConnections.size();
+		if (curConn >= static_cast<size_t>(maxCap) && maxCap > 1)
+		{
+			swprintf_s(badgeBuf, L"[%zu/%d %s]", curConn, maxCap, _(L"Full"));
+			badgeText.Foreground(SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0xFF, 0x99, 0x00 }));
+		}
+		else
+		{
+			swprintf_s(badgeBuf, L"[%zu/%d]", curConn, maxCap);
+			badgeText.Opacity(0.65);
+		}
+		badgeText.Text(badgeBuf);
+		badgeText.FontSize(12);
+		badgeText.FontWeight(winrt::Windows::UI::Text::FontWeights::Medium());
+		badgeText.VerticalAlignment(VerticalAlignment::Center);
+		badgeText.Margin({ 6, 0, 8, 0 });
+		Grid::SetColumn(badgeText, 1);
+		headerGrid.Children().Append(badgeText);
+
 		if (g_multiDeviceMode && g_audioPlaybackConnections.size() > 1)
 		{
 			Button discAllBtn;
@@ -598,7 +644,7 @@ winrt::fire_and_forget RefreshDevicePanelAsync(bool forceReopen)
 			discAllBtn.Click([](const auto&, const auto&) {
 				DisconnectAllDevices();
 			});
-			Grid::SetColumn(discAllBtn, 1);
+			Grid::SetColumn(discAllBtn, 2);
 			headerGrid.Children().Append(discAllBtn);
 		}
 
@@ -609,9 +655,10 @@ winrt::fire_and_forget RefreshDevicePanelAsync(bool forceReopen)
 		refreshBtn.Content(refreshIcon);
 		refreshBtn.Padding({ 6, 6, 6, 6 });
 		refreshBtn.Click([](const auto&, const auto&) {
+			g_deviceErrorMessages.clear();
 			RefreshDevicePanelAsync(false);
 		});
-		Grid::SetColumn(refreshBtn, 2);
+		Grid::SetColumn(refreshBtn, 3);
 		headerGrid.Children().Append(refreshBtn);
 
 		rootPanel.Children().Append(headerGrid);
@@ -1011,6 +1058,7 @@ winrt::fire_and_forget ConnectDevice(DeviceInformation device)
 	}
 
 	g_connectingDeviceIds.insert(deviceId);
+	g_deviceErrorMessages.erase(deviceId);
 	RefreshDevicePanelAsync(false);
 
 	bool success = false;
@@ -1063,11 +1111,11 @@ winrt::fire_and_forget ConnectDevice(DeviceInformation device)
 				break;
 			case AudioPlaybackConnectionOpenResultStatus::DeniedBySystem:
 				success = false;
-				errorMessage = _(L"The operation was denied by the system");
+				errorMessage = _(L"Hardware limit reached (Max 2 devices). Please disconnect one first.");
 				break;
 			case AudioPlaybackConnectionOpenResultStatus::UnknownFailure:
 				success = false;
-				winrt::throw_hresult(result.ExtendedError());
+				errorMessage = _(L"Hardware limit reached (Max 2 devices). Please disconnect one first.");
 				break;
 			}
 		}
@@ -1089,6 +1137,7 @@ winrt::fire_and_forget ConnectDevice(DeviceInformation device)
 	if (success)
 	{
 		g_lostConnectionsInCurrentSession.erase(deviceId);
+		g_deviceErrorMessages.erase(deviceId);
 		SaveSettings();
 		UpdateTrayTooltip();
 		UpdateAudioThreadPriority(true);
@@ -1100,6 +1149,7 @@ winrt::fire_and_forget ConnectDevice(DeviceInformation device)
 	}
 	else
 	{
+		g_deviceErrorMessages[deviceId] = errorMessage;
 		auto it = g_audioPlaybackConnections.find(deviceId);
 		if (it != g_audioPlaybackConnections.end())
 		{

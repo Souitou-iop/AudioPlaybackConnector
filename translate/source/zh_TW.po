@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: AudioPlaybackConnector\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-22 23:50+0800\n"
-"PO-Revision-Date: 2026-08-22 23:50+0800\n"
+"POT-Creation-Date: 2026-08-23 00:10+0800\n"
+"PO-Revision-Date: 2026-08-23 00:10+0800\n"
 "Last-Translator: Richard Yu <yurichard3839@gmail.com>\n"
 "Language-Team: \n"
 "Language: zh_TW\n"
@@ -51,6 +51,12 @@ msgstr "音量"
 
 msgid "Refresh"
 msgstr "重新整理"
+
+msgid "Full"
+msgstr "已滿載"
+
+msgid "Hardware limit reached (Max 2 devices). Please disconnect one first."
+msgstr "已達藍牙硬體並發上限 (最多2台)，請先中斷一台裝置"
 
 msgid "Exit"
 msgstr "結束"

@@ -37,6 +37,7 @@ inline FocusState g_menuFocusState = FocusState::Unfocused;
 
 inline std::unordered_map<std::wstring, ConnectedDeviceInfo> g_audioPlaybackConnections;
 inline std::unordered_map<std::wstring, double> g_deviceVolumes;
+inline std::unordered_map<std::wstring, std::wstring> g_deviceErrorMessages;
 inline HICON g_hIconLight = nullptr;
 inline HICON g_hIconDark = nullptr;
 inline NOTIFYICONDATAW g_nid = {
@@ -55,6 +56,11 @@ inline bool g_autoConnectNearby = false;
 inline bool g_preventSleepWhileStreaming = true;
 inline bool g_multiDeviceMode = false;
 inline std::wstring g_currentDefaultAudioEndpointId;
+
+inline int GetMaxSupportedA2dpStreams()
+{
+	return g_multiDeviceMode ? 2 : 1;
+}
 
 // Startup reconnect device IDs (only if g_reconnect is enabled)
 inline std::vector<std::wstring> g_startupReconnectDevices;
