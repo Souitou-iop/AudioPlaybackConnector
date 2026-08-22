@@ -105,3 +105,21 @@ msgstr "未知错误"
 
 msgid "Audio output switched, reconnected"
 msgstr "音频输出已切换，已自动重连"
+
+msgid "Playing"
+msgstr "正在播放"
+
+msgid "Preferred Device"
+msgstr "首选设备"
+
+msgid "Set as Preferred Device"
+msgstr "设为首选设备"
+
+msgid "Unset as Preferred Device"
+msgstr "取消首选设备"
+
+msgid "Enable media key forwarding"
+msgstr "允许键盘多媒体键控制播放"
+
+msgid "Battery"
+msgstr "电量"

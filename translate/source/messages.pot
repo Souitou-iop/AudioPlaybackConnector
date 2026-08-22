@@ -105,3 +105,21 @@ msgstr ""
 
 msgid "Audio output switched, reconnected"
 msgstr ""
+
+msgid "Playing"
+msgstr ""
+
+msgid "Preferred Device"
+msgstr ""
+
+msgid "Set as Preferred Device"
+msgstr ""
+
+msgid "Unset as Preferred Device"
+msgstr ""
+
+msgid "Enable media key forwarding"
+msgstr ""
+
+msgid "Battery"
+msgstr ""

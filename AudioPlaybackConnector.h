@@ -1,10 +1,11 @@
-#pragma once
+﻿#pragma once
 
 #include "resource.h"
 
 using namespace winrt::Windows::Data::Json;
 using namespace winrt::Windows::Devices::Enumeration;
 using namespace winrt::Windows::Foundation;
+using namespace winrt::Windows::Media;
 using namespace winrt::Windows::Media::Audio;
 using namespace winrt::Windows::UI::Xaml;
 using namespace winrt::Windows::UI::Xaml::Controls;
@@ -18,6 +19,15 @@ constexpr UINT WM_CONNECTDEVICE = WM_APP + 2;
 constexpr UINT WM_DEFAULT_AUDIO_DEVICE_CHANGED = WM_APP + 3;
 constexpr UINT WM_REFRESH_AUDIO = WM_APP + 4;
 constexpr UINT WM_UPDATE_DEVICE_PANEL = WM_APP + 5;
+constexpr UINT WM_CLI_COMMAND = WM_APP + 6;
+
+constexpr WPARAM CLI_CMD_SHOW = 1;
+constexpr WPARAM CLI_CMD_CONNECT = 2;
+constexpr WPARAM CLI_CMD_DISCONNECT = 3;
+constexpr WPARAM CLI_CMD_TOGGLE = 4;
+constexpr WPARAM CLI_CMD_EXIT = 5;
+
+constexpr UINT_PTR IDT_AUDIO_METER = 1001;
 
 struct ConnectedDeviceInfo
 {
@@ -41,6 +51,7 @@ inline FocusState g_menuFocusState = FocusState::Unfocused;
 inline std::unordered_map<std::wstring, ConnectedDeviceInfo> g_audioPlaybackConnections;
 inline std::unordered_map<std::wstring, double> g_deviceVolumes;
 inline std::unordered_map<std::wstring, std::wstring> g_deviceErrorMessages;
+inline std::unordered_map<std::wstring, TextBlock> g_deviceStatusTextBlocks;
 inline HICON g_hIconLight = nullptr;
 inline HICON g_hIconDark = nullptr;
 inline NOTIFYICONDATAW g_nid = {
@@ -58,6 +69,9 @@ inline bool g_runAtStartup = false;
 inline bool g_autoConnectNearby = false;
 inline bool g_preventSleepWhileStreaming = true;
 inline bool g_multiDeviceMode = false;
+inline bool g_enableMediaKeyForwarding = true;
+inline bool g_isAudioPlaying = false;
+inline std::wstring g_preferredDeviceId;
 inline std::wstring g_currentDefaultAudioEndpointId;
 
 inline int GetMaxSupportedA2dpStreams()
@@ -81,6 +95,8 @@ void UpdateTrayTooltip();
 void ReopenAudioConnections();
 void DisconnectAllDevices();
 void ToggleLastConnectedDevice();
+void ConnectPreferredOrLastDevice();
+winrt::fire_and_forget ConnectDeviceByNameOrId(std::wstring target);
 void UpdateAudioThreadPriority(bool enable);
 void UpdatePowerLock(bool hasConnections);
 void SetupDeviceWatcher(bool enable);
@@ -89,6 +105,7 @@ void UpdateHeaderBadgeUI();
 void UpdateDevicePanelUI();
 void SetDeviceVolume(std::wstring_view deviceId, float volume);
 float GetDeviceVolume(std::wstring_view deviceId);
+void CheckAudioMeter();
 void ExitApp();
 
 #include "Util.hpp"
