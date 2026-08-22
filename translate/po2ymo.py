@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import sys
 import os
 import ast
@@ -104,7 +104,36 @@ def po2ymo(infile_path, outfile_path, includefuzzy=False, encoding='utf-16le'):
             outfile.write(data)
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        print("usage: po2ymo.py <infile> <outfile>")
-        sys.exit(1)
-    po2ymo(sys.argv[1], sys.argv[2])
+    if len(sys.argv) == 3:
+        po2ymo(sys.argv[1], sys.argv[2])
+    else:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        source_dir = os.path.join(script_dir, 'source')
+        gen_dir = os.path.join(script_dir, 'generated')
+        os.makedirs(gen_dir, exist_ok=True)
+        
+        zh_cn_po = os.path.join(source_dir, 'zh_CN.po')
+        zh_cn_ymo = os.path.join(gen_dir, 'zh_CN.ymo')
+        if os.path.exists(zh_cn_po):
+            po2ymo(zh_cn_po, zh_cn_ymo)
+            print(f"Generated {zh_cn_ymo}")
+            
+        zh_tw_po = os.path.join(source_dir, 'zh_TW.po')
+        zh_tw_ymo = os.path.join(gen_dir, 'zh_TW.ymo')
+        if os.path.exists(zh_tw_po):
+            po2ymo(zh_tw_po, zh_tw_ymo)
+            print(f"Generated {zh_tw_ymo}")
+            
+        rc_content = '''#include "../../targetver.h"
+#include "windows.h"
+
+LANGUAGE LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED
+1 YMO "zh_CN.ymo"
+
+LANGUAGE LANG_CHINESE, SUBLANG_CHINESE_TRADITIONAL
+1 YMO "zh_TW.ymo"
+'''
+        rc_path = os.path.join(gen_dir, 'translate.rc')
+        with open(rc_path, 'w', encoding='utf-16') as f:
+            f.write(rc_content)
+        print(f"Generated {rc_path}")

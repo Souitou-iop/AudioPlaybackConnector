@@ -39,20 +39,18 @@ jobs:
         python-version: '3.10'
 
     - name: Generate translation resources
-      run: |
-        cd translate
-        python ./po2ymo.py ./source/zh_CN.po ./generated/zh_CN.ymo
-        python ./po2ymo.py ./source/zh_TW.po ./generated/zh_TW.ymo
-        sh ./gen_rc.sh
-      shell: bash
+      run: python translate/po2ymo.py
+      shell: cmd
 
     - name: Restore NuGet packages
       run: nuget restore AudioPlaybackConnector.sln
 
-    - name: Build x64 and ARM64
-      run: |
-        msbuild AudioPlaybackConnector.sln -p:Configuration=Release -p:Platform=x64 -m
-        msbuild AudioPlaybackConnector.sln -p:Configuration=Release -p:Platform=ARM64 -m
+    - name: Build x64
+      run: msbuild AudioPlaybackConnector.sln -p:Configuration=Release -p:Platform=x64 -m
+      shell: cmd
+
+    - name: Build ARM64
+      run: msbuild AudioPlaybackConnector.sln -p:Configuration=Release -p:Platform=ARM64 -m
       shell: cmd
 
     - name: Upload Build Artifacts
