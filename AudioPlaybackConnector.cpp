@@ -767,7 +767,7 @@ void UpdateDevicePanelUI()
 	}
 }
 
-static int GetBatteryPercentFromDevice(const DeviceInformation& dev)
+int GetBatteryPercentFromDevice(const DeviceInformation& dev)
 {
 	try
 	{
