@@ -14,6 +14,18 @@ using namespace winrt::Windows::UI::Xaml::Hosting;
 using namespace winrt::Windows::UI::Xaml::Media;
 namespace fs = std::filesystem;
 
+inline FontIcon CreateFontIcon(std::wstring_view glyph, double fontSize = 0)
+{
+	FontIcon icon;
+	icon.FontFamily(FontFamily(L"Segoe Fluent Icons, Segoe MDL2 Assets"));
+	icon.Glyph(glyph);
+	if (fontSize > 0)
+	{
+		icon.FontSize(fontSize);
+	}
+	return icon;
+}
+
 constexpr UINT WM_NOTIFYICON = WM_APP + 1;
 constexpr UINT WM_CONNECTDEVICE = WM_APP + 2;
 constexpr UINT WM_DEFAULT_AUDIO_DEVICE_CHANGED = WM_APP + 3;

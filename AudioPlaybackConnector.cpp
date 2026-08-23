@@ -240,17 +240,7 @@ winrt::fire_and_forget CheckForUpdatesAsync(bool manualTrigger)
 }
 
 
-inline FontIcon CreateFontIcon(std::wstring_view glyph, double fontSize = 0)
-{
-	FontIcon icon;
-	icon.FontFamily(FontFamily(L"Segoe Fluent Icons, Segoe MDL2 Assets"));
-	icon.Glyph(glyph);
-	if (fontSize > 0)
-	{
-		icon.FontSize(fontSize);
-	}
-	return icon;
-}
+
 
 
 
