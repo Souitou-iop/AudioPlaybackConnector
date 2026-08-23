@@ -56,6 +56,234 @@ void ApplyTheme()
 void ExitApp();
 
 // System Media Transport Controls (SMTC) & Windows Integration
+inline std::wstring GetAdbExecutablePath()
+{
+	wchar_t pathBuf[MAX_PATH];
+	if (SearchPathW(nullptr, L"adb.exe", nullptr, MAX_PATH, pathBuf, nullptr) > 0)
+	{
+		return pathBuf;
+	}
+	wchar_t userProfile[MAX_PATH] = {};
+	if (GetEnvironmentVariableW(L"USERPROFILE", userProfile, MAX_PATH) > 0)
+	{
+		std::wstring scoopAdb = std::wstring(userProfile) + LR"(\scoop\apps\android-clt\current\platform-tools\adb.exe)";
+		if (fs::exists(scoopAdb)) return scoopAdb;
+		std::wstring localAdb = std::wstring(userProfile) + LR"(\AppData\Local\Android\Sdk\platform-tools\adb.exe)";
+		if (fs::exists(localAdb)) return localAdb;
+	}
+	return L"adb.exe";
+}
+
+void SendAdbMediaCommand(MediaAction action)
+{
+	std::thread([action]() {
+		std::wstring adbPath = GetAdbExecutablePath();
+		std::wstring cmd1, cmd2;
+		switch (action)
+		{
+		case MediaAction::TogglePlayPause:
+			cmd1 = L"shell cmd media_session dispatch play-pause";
+			cmd2 = L"shell input keyevent 85";
+			break;
+		case MediaAction::Play:
+			cmd1 = L"shell cmd media_session dispatch play";
+			cmd2 = L"shell input keyevent 126";
+			break;
+		case MediaAction::Pause:
+			cmd1 = L"shell cmd media_session dispatch pause";
+			cmd2 = L"shell input keyevent 127";
+			break;
+		case MediaAction::NextTrack:
+			cmd1 = L"shell cmd media_session dispatch next";
+			cmd2 = L"shell input keyevent 87";
+			break;
+		case MediaAction::PreviousTrack:
+			cmd1 = L"shell cmd media_session dispatch previous";
+			cmd2 = L"shell input keyevent 88";
+			break;
+		case MediaAction::Stop:
+			cmd1 = L"shell cmd media_session dispatch pause";
+			cmd2 = L"shell input keyevent 127";
+			break;
+		}
+
+		STARTUPINFOW si = { sizeof(si) };
+		si.dwFlags = STARTF_USESHOWWINDOW;
+		si.wShowWindow = SW_HIDE;
+		PROCESS_INFORMATION pi = {};
+
+		if (!cmd1.empty())
+		{
+			std::wstring cmdLine = L"\"" + adbPath + L"\" " + cmd1;
+			if (CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi))
+			{
+				WaitForSingleObject(pi.hProcess, 1500);
+				CloseHandle(pi.hProcess);
+				CloseHandle(pi.hThread);
+			}
+		}
+		if (!cmd2.empty())
+		{
+			std::wstring cmdLine = L"\"" + adbPath + L"\" " + cmd2;
+			if (CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi))
+			{
+				WaitForSingleObject(pi.hProcess, 1500);
+				CloseHandle(pi.hProcess);
+				CloseHandle(pi.hThread);
+			}
+		}
+	}).detach();
+}
+
+winrt::fire_and_forget ExecuteMediaCommandAsync(MediaAction action)
+{
+	if (!g_enableMediaKeyForwarding)
+		co_return;
+
+	// 1. Dispatch via ADB helper in background (for connected Android devices)
+	SendAdbMediaCommand(action);
+
+	// 2. Also attempt Windows Global System Media Transport Controls Session dispatch
+	bool handled = false;
+	try
+	{
+		auto manager = co_await GlobalSystemMediaTransportControlsSessionManager::RequestAsync();
+		if (manager)
+		{
+			auto session = manager.GetCurrentSession();
+			if (session)
+			{
+				switch (action)
+				{
+				case MediaAction::TogglePlayPause:
+					handled = co_await session.TryTogglePlayPauseAsync();
+					if (!handled)
+					{
+						auto info = session.GetPlaybackInfo();
+						if (info && info.PlaybackStatus() == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing)
+						{
+							handled = co_await session.TryPauseAsync();
+						}
+						else
+						{
+							handled = co_await session.TryPlayAsync();
+						}
+					}
+					break;
+				case MediaAction::Play:
+					handled = co_await session.TryPlayAsync();
+					break;
+				case MediaAction::Pause:
+					handled = co_await session.TryPauseAsync();
+					break;
+				case MediaAction::NextTrack:
+					handled = co_await session.TrySkipNextAsync();
+					break;
+				case MediaAction::PreviousTrack:
+					handled = co_await session.TrySkipPreviousAsync();
+					break;
+				case MediaAction::Stop:
+					handled = co_await session.TryStopAsync();
+					break;
+				}
+			}
+
+			if (!handled)
+			{
+				auto sessions = manager.GetSessions();
+				for (const auto& s : sessions)
+				{
+					try
+					{
+						switch (action)
+						{
+						case MediaAction::TogglePlayPause:
+							handled = co_await s.TryTogglePlayPauseAsync();
+							break;
+						case MediaAction::Play:
+							handled = co_await s.TryPlayAsync();
+							break;
+						case MediaAction::Pause:
+							handled = co_await s.TryPauseAsync();
+							break;
+						case MediaAction::NextTrack:
+							handled = co_await s.TrySkipNextAsync();
+							break;
+						case MediaAction::PreviousTrack:
+							handled = co_await s.TrySkipPreviousAsync();
+							break;
+						case MediaAction::Stop:
+							handled = co_await s.TryStopAsync();
+							break;
+						}
+						if (handled) break;
+					}
+					catch (...) {}
+				}
+			}
+		}
+	}
+	catch (...)
+	{
+		LOG_CAUGHT_EXCEPTION();
+	}
+
+	// 3. Fallback: Broadcast system hardware media key with re-entrancy protection
+	if (!handled)
+	{
+		BYTE vk = 0;
+		switch (action)
+		{
+		case MediaAction::TogglePlayPause:
+		case MediaAction::Play:
+		case MediaAction::Pause:
+			vk = VK_MEDIA_PLAY_PAUSE;
+			break;
+		case MediaAction::NextTrack:
+			vk = VK_MEDIA_NEXT_TRACK;
+			break;
+		case MediaAction::PreviousTrack:
+			vk = VK_MEDIA_PREV_TRACK;
+			break;
+		case MediaAction::Stop:
+			vk = VK_MEDIA_STOP;
+			break;
+		}
+
+		if (vk != 0)
+		{
+			g_isForwardingMediaKey.store(true);
+			SendMediaKey(vk);
+			std::thread([]() {
+				std::this_thread::sleep_for(std::chrono::milliseconds(150));
+				g_isForwardingMediaKey.store(false);
+			}).detach();
+		}
+	}
+
+	// Immediate optimistic state update
+	if (action == MediaAction::TogglePlayPause)
+	{
+		g_isAudioPlaying = !g_isAudioPlaying;
+	}
+	else if (action == MediaAction::Play)
+	{
+		g_isAudioPlaying = true;
+	}
+	else if (action == MediaAction::Pause || action == MediaAction::Stop)
+	{
+		g_isAudioPlaying = false;
+	}
+
+	UpdateSmtcState(!g_audioPlaybackConnections.empty(), g_isAudioPlaying);
+	PostMessageW(g_hWnd, WM_UPDATE_DEVICE_PANEL, 0, 0);
+}
+
+void ExecuteMediaCommand(MediaAction action)
+{
+	ExecuteMediaCommandAsync(action);
+}
+
 void SetupSmtc(HWND hWnd)
 {
 	try
@@ -70,22 +298,31 @@ void SetupSmtc(HWND hWnd)
 				g_smtc.IsPauseEnabled(true);
 				g_smtc.IsNextEnabled(true);
 				g_smtc.IsPreviousEnabled(true);
+				g_smtc.IsStopEnabled(true);
 				g_smtc.IsEnabled(false);
 
 				g_smtcButtonToken = g_smtc.ButtonPressed([](const auto&, const winrt::Windows::Media::SystemMediaTransportControlsButtonPressedEventArgs& args) {
 					if (!g_enableMediaKeyForwarding)
 						return;
+					if (g_isForwardingMediaKey.load())
+						return;
+
 					switch (args.Button())
 					{
 					case winrt::Windows::Media::SystemMediaTransportControlsButton::Play:
+						ExecuteMediaCommand(MediaAction::Play);
+						break;
 					case winrt::Windows::Media::SystemMediaTransportControlsButton::Pause:
-						SendMediaKey(VK_MEDIA_PLAY_PAUSE);
+						ExecuteMediaCommand(MediaAction::Pause);
 						break;
 					case winrt::Windows::Media::SystemMediaTransportControlsButton::Next:
-						SendMediaKey(VK_MEDIA_NEXT_TRACK);
+						ExecuteMediaCommand(MediaAction::NextTrack);
 						break;
 					case winrt::Windows::Media::SystemMediaTransportControlsButton::Previous:
-						SendMediaKey(VK_MEDIA_PREV_TRACK);
+						ExecuteMediaCommand(MediaAction::PreviousTrack);
+						break;
+					case winrt::Windows::Media::SystemMediaTransportControlsButton::Stop:
+						ExecuteMediaCommand(MediaAction::Stop);
 						break;
 					default:
 						break;
@@ -166,7 +403,7 @@ std::wstring GetStatusJsonString()
 {
 	JsonObject root;
 	root.Insert(L"status", JsonValue::CreateStringValue(L"running"));
-	root.Insert(L"version", JsonValue::CreateStringValue(L"1.0-beta2"));
+	root.Insert(L"version", JsonValue::CreateStringValue(L"1.0.0.4"));
 	root.Insert(L"connectedCount", JsonValue::CreateNumberValue(static_cast<double>(g_audioPlaybackConnections.size())));
 	root.Insert(L"isAudioPlaying", JsonValue::CreateBooleanValue(g_isAudioPlaying));
 	root.Insert(L"multiDeviceMode", JsonValue::CreateBooleanValue(g_multiDeviceMode));
@@ -381,21 +618,12 @@ void CheckAudioEndpointVolume()
 
 void CheckAudioMeter()
 {
-	if (g_audioPlaybackConnections.empty() || !g_deviceListPanel)
+	if (g_audioPlaybackConnections.empty())
 	{
 		if (g_isAudioPlaying)
 		{
 			g_isAudioPlaying = false;
-			UpdateSmtcState(!g_audioPlaybackConnections.empty(), false);
-			bool isLight = IsAppsLightMode();
-			for (auto& pair : g_deviceStatusTextBlocks)
-			{
-				if (pair.second)
-				{
-					pair.second.Text(_(L"Connected"));
-					pair.second.Foreground(SolidColorBrush(isLight ? winrt::Windows::UI::Color{ 0x90, 0x00, 0x00, 0x00 } : winrt::Windows::UI::Color{ 0xB0, 0xFF, 0xFF, 0xFF }));
-				}
-			}
+			UpdateSmtcState(false, false);
 		}
 		return;
 	}
@@ -423,22 +651,25 @@ void CheckAudioMeter()
 	{
 		g_isAudioPlaying = nowPlaying;
 		UpdateSmtcState(!g_audioPlaybackConnections.empty(), g_isAudioPlaying);
-		for (auto& pair : g_deviceStatusTextBlocks)
+		if (g_deviceListPanel)
 		{
-			if (pair.second)
+			bool isLight = IsAppsLightMode();
+			for (auto& pair : g_deviceStatusTextBlocks)
 			{
-				if (g_isAudioPlaying)
+				if (pair.second)
 				{
-					std::wstring playingStr = L"● ";
-					playingStr += _(L"Playing");
-					pair.second.Text(playingStr);
-					pair.second.Foreground(SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0x5C, 0xD6, 0x5C })); // Fresh Green
-				}
-				else
-				{
-					pair.second.Text(_(L"Connected"));
-					bool isLight = IsAppsLightMode();
-					pair.second.Foreground(SolidColorBrush(isLight ? winrt::Windows::UI::Color{ 0x90, 0x00, 0x00, 0x00 } : winrt::Windows::UI::Color{ 0xB0, 0xFF, 0xFF, 0xFF }));
+					if (g_isAudioPlaying)
+					{
+						std::wstring playingStr = L"● ";
+						playingStr += _(L"Playing");
+						pair.second.Text(playingStr);
+						pair.second.Foreground(SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0x5C, 0xD6, 0x5C })); // Fresh Green
+					}
+					else
+					{
+						pair.second.Text(_(L"Connected"));
+						pair.second.Foreground(SolidColorBrush(isLight ? winrt::Windows::UI::Color{ 0x90, 0x00, 0x00, 0x00 } : winrt::Windows::UI::Color{ 0xB0, 0xFF, 0xFF, 0xFF }));
+					}
 				}
 			}
 		}
@@ -1376,7 +1607,6 @@ winrt::fire_and_forget RefreshDevicePanelAsync(bool forceReopen)
 		flyout.Placement(FlyoutPlacementMode::Top);
 		flyout.ShouldConstrainToRootBounds(false);
 		flyout.Closed([](const auto&, const auto&) {
-			KillTimer(g_hWnd, IDT_AUDIO_METER);
 			g_deviceListPanel = nullptr;
 			g_panelBadgeText = nullptr;
 			g_panelDisconnectAllBtn = nullptr;
@@ -1388,7 +1618,6 @@ winrt::fire_and_forget RefreshDevicePanelAsync(bool forceReopen)
 
 		g_deviceFlyout = flyout;
 		g_deviceFlyout.ShowAt(g_xamlCanvas);
-		SetTimer(g_hWnd, IDT_AUDIO_METER, 200, nullptr);
 	}
 	catch (...)
 	{
@@ -1426,6 +1655,36 @@ static void HandleCliCommand(const std::wstring& cmdLine)
 			}
 			FreeConsole();
 		}
+		ExitProcess(0);
+	}
+
+	if (cmdLine.find(L"/Play") != std::wstring::npos || cmdLine.find(L"/play") != std::wstring::npos)
+	{
+		ExecuteMediaCommand(MediaAction::Play);
+		return;
+	}
+
+	if (cmdLine.find(L"/Pause") != std::wstring::npos || cmdLine.find(L"/pause") != std::wstring::npos)
+	{
+		ExecuteMediaCommand(MediaAction::Pause);
+		return;
+	}
+
+	if (cmdLine.find(L"/TogglePlay") != std::wstring::npos || cmdLine.find(L"/PlayPause") != std::wstring::npos || cmdLine.find(L"/pp") != std::wstring::npos)
+	{
+		ExecuteMediaCommand(MediaAction::TogglePlayPause);
+		return;
+	}
+
+	if (cmdLine.find(L"/Next") != std::wstring::npos || cmdLine.find(L"/next") != std::wstring::npos)
+	{
+		ExecuteMediaCommand(MediaAction::NextTrack);
+		return;
+	}
+
+	if (cmdLine.find(L"/Prev") != std::wstring::npos || cmdLine.find(L"/prev") != std::wstring::npos)
+	{
+		ExecuteMediaCommand(MediaAction::PreviousTrack);
 		return;
 	}
 
@@ -1517,6 +1776,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		ExitProcess(0);
 	}
 
+	SetCurrentProcessExplicitAppUserModelID(L"AudioPlaybackConnector");
 	g_hInst = hInstance;
 	LoadSettings();
 	LoadTranslateData(g_language);
@@ -1568,6 +1828,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 	SetupAudioEndpointListener(g_hWnd);
 	SetupSmtc(g_hWnd);
+	SetTimer(g_hWnd, IDT_AUDIO_METER, 250, nullptr);
 
 	LoadSettings();
 	SetupDeviceWatcher(g_autoConnectNearby);
@@ -1633,10 +1894,32 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	}
 	case WM_APPCOMMAND:
 	{
-		if (g_enableMediaKeyForwarding && !g_audioPlaybackConnections.empty())
+		if (g_enableMediaKeyForwarding && !g_audioPlaybackConnections.empty() && !g_isForwardingMediaKey.load())
 		{
-			// Let system media transport controls handle or forward
-			return DefWindowProcW(hWnd, message, wParam, lParam);
+			short cmd = GET_APPCOMMAND_LPARAM(lParam);
+			switch (cmd)
+			{
+			case APPCOMMAND_MEDIA_PLAY_PAUSE:
+				ExecuteMediaCommand(MediaAction::TogglePlayPause);
+				return TRUE;
+			case APPCOMMAND_MEDIA_PLAY:
+				ExecuteMediaCommand(MediaAction::Play);
+				return TRUE;
+			case APPCOMMAND_MEDIA_PAUSE:
+				ExecuteMediaCommand(MediaAction::Pause);
+				return TRUE;
+			case APPCOMMAND_MEDIA_NEXTTRACK:
+				ExecuteMediaCommand(MediaAction::NextTrack);
+				return TRUE;
+			case APPCOMMAND_MEDIA_PREVIOUSTRACK:
+				ExecuteMediaCommand(MediaAction::PreviousTrack);
+				return TRUE;
+			case APPCOMMAND_MEDIA_STOP:
+				ExecuteMediaCommand(MediaAction::Stop);
+				return TRUE;
+			default:
+				break;
+			}
 		}
 		break;
 	}
