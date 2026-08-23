@@ -87,7 +87,7 @@ std::wstring GetStatusJsonString()
 {
 	JsonObject root;
 	root.Insert(L"status", JsonValue::CreateStringValue(L"running"));
-	root.Insert(L"version", JsonValue::CreateStringValue(L"1.0.0.4"));
+	root.Insert(L"version", JsonValue::CreateStringValue(L"1.0.0.5"));
 	root.Insert(L"connectedCount", JsonValue::CreateNumberValue(static_cast<double>(g_audioPlaybackConnections.size())));
 	root.Insert(L"isAudioPlaying", JsonValue::CreateBooleanValue(g_isAudioPlaying));
 	root.Insert(L"multiDeviceMode", JsonValue::CreateBooleanValue(g_multiDeviceMode));
