@@ -132,3 +132,42 @@ msgstr ""
 
 msgid "Close"
 msgstr ""
+
+msgid "Show connection notifications"
+msgstr ""
+
+msgid "Bluetooth Audio Connected"
+msgstr ""
+
+msgid "Bluetooth Audio Disconnected"
+msgstr ""
+
+msgid "is ready to stream audio"
+msgstr ""
+
+msgid "No paired Bluetooth devices"
+msgstr ""
+
+msgid "Pair your phone in Windows Settings first"
+msgstr ""
+
+msgid "＋ Pair New Device"
+msgstr ""
+
+msgid "Check for Updates"
+msgstr ""
+
+msgid "AudioPlaybackConnector Update"
+msgstr ""
+
+msgid "A new version is available:"
+msgstr ""
+
+msgid "Would you like to open GitHub to download it?"
+msgstr ""
+
+msgid "You are using the latest version (v1.0 Beta)."
+msgstr ""
+
+msgid "Failed to check for updates. Please check your internet connection."
+msgstr ""

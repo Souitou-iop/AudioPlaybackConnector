@@ -29,6 +29,203 @@ float GetDeviceVolume(std::wstring_view deviceId);
 void CheckAudioMeter();
 void ExitApp();
 
+// System Media Transport Controls (SMTC) & Windows Integration
+void SetupSmtc(HWND hWnd)
+{
+	try
+	{
+		auto interop = winrt::get_activation_factory<winrt::Windows::Media::SystemMediaTransportControls, ISystemMediaTransportControlsInterop>();
+		if (interop)
+		{
+			winrt::check_hresult(interop->GetForWindow(hWnd, winrt::guid_of<winrt::Windows::Media::SystemMediaTransportControls>(), winrt::put_abi(g_smtc)));
+			if (g_smtc)
+			{
+				g_smtc.IsPlayEnabled(true);
+				g_smtc.IsPauseEnabled(true);
+				g_smtc.IsNextEnabled(true);
+				g_smtc.IsPreviousEnabled(true);
+				g_smtc.IsEnabled(false);
+
+				g_smtcButtonToken = g_smtc.ButtonPressed([](const auto&, const winrt::Windows::Media::SystemMediaTransportControlsButtonPressedEventArgs& args) {
+					if (!g_enableMediaKeyForwarding)
+						return;
+					switch (args.Button())
+					{
+					case winrt::Windows::Media::SystemMediaTransportControlsButton::Play:
+					case winrt::Windows::Media::SystemMediaTransportControlsButton::Pause:
+						SendMediaKey(VK_MEDIA_PLAY_PAUSE);
+						break;
+					case winrt::Windows::Media::SystemMediaTransportControlsButton::Next:
+						SendMediaKey(VK_MEDIA_NEXT_TRACK);
+						break;
+					case winrt::Windows::Media::SystemMediaTransportControlsButton::Previous:
+						SendMediaKey(VK_MEDIA_PREV_TRACK);
+						break;
+					default:
+						break;
+					}
+				});
+			}
+		}
+	}
+	CATCH_LOG();
+}
+
+void UpdateSmtcState(bool hasConnections, bool isPlaying, std::wstring_view deviceName)
+{
+	if (!g_smtc)
+		return;
+
+	try
+	{
+		if (!hasConnections)
+		{
+			g_smtc.PlaybackStatus(winrt::Windows::Media::MediaPlaybackStatus::Closed);
+			g_smtc.IsEnabled(false);
+			return;
+		}
+
+		g_smtc.IsEnabled(true);
+		g_smtc.PlaybackStatus(isPlaying ? winrt::Windows::Media::MediaPlaybackStatus::Playing : winrt::Windows::Media::MediaPlaybackStatus::Paused);
+
+		auto updater = g_smtc.DisplayUpdater();
+		updater.Type(winrt::Windows::Media::MediaPlaybackType::Music);
+		if (!deviceName.empty())
+		{
+			updater.MusicProperties().Title(winrt::hstring(deviceName));
+		}
+		else if (!g_audioPlaybackConnections.empty())
+		{
+			updater.MusicProperties().Title(winrt::hstring(g_audioPlaybackConnections.begin()->second.name));
+		}
+		else
+		{
+			updater.MusicProperties().Title(L"Bluetooth Audio");
+		}
+		updater.MusicProperties().Artist(L"Bluetooth Audio Receiver");
+		updater.Update();
+	}
+	CATCH_LOG();
+}
+
+void ShowTrayNotification(std::wstring_view title, std::wstring_view message)
+{
+	NOTIFYICONDATAW nid = g_nid;
+	nid.uFlags |= NIF_INFO;
+	nid.dwInfoFlags = NIIF_INFO | NIIF_LARGE_ICON;
+	wcsncpy_s(nid.szInfoTitle, title.data(), _TRUNCATE);
+	wcsncpy_s(nid.szInfo, message.data(), _TRUNCATE);
+	Shell_NotifyIconW(NIM_MODIFY, &nid);
+}
+
+std::wstring GetDeviceCodecName(const DeviceInformation& dev)
+{
+	std::wstring name = dev.Name().c_str();
+	for (auto& c : name) c = towlower(c);
+
+	if (name.find(L"iphone") != std::wstring::npos ||
+		name.find(L"ipad") != std::wstring::npos ||
+		name.find(L"macbook") != std::wstring::npos ||
+		name.find(L"mac") != std::wstring::npos ||
+		name.find(L"airpods") != std::wstring::npos ||
+		name.find(L"apple") != std::wstring::npos)
+	{
+		return L"AAC";
+	}
+
+	return L"AAC";
+}
+
+std::wstring GetStatusJsonString()
+{
+	JsonObject root;
+	root.Insert(L"status", JsonValue::CreateStringValue(L"running"));
+	root.Insert(L"version", JsonValue::CreateStringValue(L"1.0-beta"));
+	root.Insert(L"connectedCount", JsonValue::CreateNumberValue(static_cast<double>(g_audioPlaybackConnections.size())));
+	root.Insert(L"isAudioPlaying", JsonValue::CreateBooleanValue(g_isAudioPlaying));
+	root.Insert(L"multiDeviceMode", JsonValue::CreateBooleanValue(g_multiDeviceMode));
+	root.Insert(L"enableMediaKeyForwarding", JsonValue::CreateBooleanValue(g_enableMediaKeyForwarding));
+	root.Insert(L"enableConnectionNotifications", JsonValue::CreateBooleanValue(g_enableConnectionNotifications));
+
+	if (!g_preferredDeviceId.empty())
+	{
+		root.Insert(L"preferredDeviceId", JsonValue::CreateStringValue(g_preferredDeviceId));
+	}
+
+	JsonArray devArray;
+	for (const auto& pair : g_audioPlaybackConnections)
+	{
+		JsonObject devObj;
+		devObj.Insert(L"id", JsonValue::CreateStringValue(pair.first));
+		devObj.Insert(L"name", JsonValue::CreateStringValue(pair.second.name));
+		devObj.Insert(L"connected", JsonValue::CreateBooleanValue(true));
+		devObj.Insert(L"isPreferred", JsonValue::CreateBooleanValue(pair.first == g_preferredDeviceId));
+		if (pair.second.device)
+		{
+			int bat = GetBatteryPercentFromDevice(pair.second.device);
+			if (bat >= 0)
+			{
+				devObj.Insert(L"batteryPercent", JsonValue::CreateNumberValue(bat));
+			}
+			devObj.Insert(L"codec", JsonValue::CreateStringValue(GetDeviceCodecName(pair.second.device)));
+		}
+		devArray.Append(devObj);
+	}
+	root.Insert(L"connectedDevices", devArray);
+
+	return root.Stringify().c_str();
+}
+
+winrt::fire_and_forget CheckForUpdatesAsync(bool manualTrigger)
+{
+	try
+	{
+		winrt::Windows::Web::Http::HttpClient client;
+		client.DefaultRequestHeaders().UserAgent().TryParseAdd(L"AudioPlaybackConnector/1.0");
+
+		auto uri = winrt::Windows::Foundation::Uri(L"https://api.github.com/repos/Souitou-iop/AudioPlaybackConnector/releases/latest");
+		auto response = co_await client.GetAsync(uri);
+		if (response.IsSuccessStatusCode())
+		{
+			auto jsonStr = co_await response.Content().ReadAsStringAsync();
+			auto jsonObj = JsonObject::Parse(jsonStr);
+			if (jsonObj.HasKey(L"tag_name"))
+			{
+				auto latestTag = std::wstring(jsonObj.Lookup(L"tag_name").GetString());
+				auto htmlUrl = jsonObj.HasKey(L"html_url") ? std::wstring(jsonObj.Lookup(L"html_url").GetString()) : L"https://github.com/Souitou-iop/AudioPlaybackConnector/releases/latest";
+
+				if (latestTag != L"v1.0-beta" && !latestTag.empty())
+				{
+					std::wstring msg = _(L"A new version is available:") + L" " + latestTag + L"\n" + _(L"Would you like to open GitHub to download it?");
+					int ret = MessageBoxW(g_hWnd, msg.c_str(), _(L"AudioPlaybackConnector Update").c_str(), MB_YESNO | MB_ICONINFORMATION | MB_TOPMOST);
+					if (ret == IDYES)
+					{
+						ShellExecuteW(nullptr, L"open", htmlUrl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+					}
+					co_return;
+				}
+				else if (manualTrigger)
+				{
+					MessageBoxW(g_hWnd, _(L"You are using the latest version (v1.0 Beta).").c_str(), _(L"Check for Updates").c_str(), MB_OK | MB_ICONINFORMATION | MB_TOPMOST);
+					co_return;
+				}
+			}
+		}
+		else if (manualTrigger)
+		{
+			MessageBoxW(g_hWnd, _(L"Failed to check for updates. Please check your internet connection.").c_str(), _(L"Check for Updates").c_str(), MB_OK | MB_ICONWARNING | MB_TOPMOST);
+		}
+	}
+	catch (...)
+	{
+		if (manualTrigger)
+		{
+			MessageBoxW(g_hWnd, _(L"Failed to check for updates. Please check your internet connection.").c_str(), _(L"Check for Updates").c_str(), MB_OK | MB_ICONWARNING | MB_TOPMOST);
+		}
+	}
+}
+
+
 inline FontIcon CreateFontIcon(std::wstring_view glyph, double fontSize = 0)
 {
 	FontIcon icon;
@@ -177,6 +374,7 @@ void CheckAudioMeter()
 		if (g_isAudioPlaying)
 		{
 			g_isAudioPlaying = false;
+			UpdateSmtcState(!g_audioPlaybackConnections.empty(), false);
 			for (auto& pair : g_deviceStatusTextBlocks)
 			{
 				if (pair.second)
@@ -211,6 +409,7 @@ void CheckAudioMeter()
 	if (nowPlaying != g_isAudioPlaying)
 	{
 		g_isAudioPlaying = nowPlaying;
+		UpdateSmtcState(!g_audioPlaybackConnections.empty(), g_isAudioPlaying);
 		for (auto& pair : g_deviceStatusTextBlocks)
 		{
 			if (pair.second)
@@ -431,6 +630,10 @@ void DisconnectAllDevices()
 	for (const auto& conn : g_audioPlaybackConnections)
 	{
 		try { conn.second.connection.Close(); } catch (...) {}
+		if (g_enableConnectionNotifications)
+		{
+			ShowTrayNotification(_(L"Bluetooth Audio Disconnected"), conn.second.name);
+		}
 	}
 	g_audioPlaybackConnections.clear();
 	g_lostConnectionsInCurrentSession.clear();
@@ -439,6 +642,7 @@ void DisconnectAllDevices()
 	UpdateTrayTooltip();
 	UpdateAudioThreadPriority(false);
 	UpdatePowerLock(false);
+	UpdateSmtcState(false, false);
 	UpdateDevicePanelUI();
 }
 
@@ -638,12 +842,41 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 
 	if (devices.Size() == 0)
 	{
+		StackPanel emptyPanel;
+		emptyPanel.HorizontalAlignment(HorizontalAlignment::Center);
+		emptyPanel.Margin({ 0, 16, 0, 16 });
+
+		FontIcon emptyIcon = CreateFontIcon(L"\uE702", 28);
+		emptyIcon.HorizontalAlignment(HorizontalAlignment::Center);
+		emptyIcon.Opacity(0.5);
+		emptyPanel.Children().Append(emptyIcon);
+
 		TextBlock emptyText;
-		emptyText.Text(_(L"No Bluetooth audio devices found."));
-		emptyText.Opacity(0.6);
-		emptyText.Margin({ 0, 16, 0, 16 });
+		emptyText.Text(_(L"No paired Bluetooth devices"));
+		emptyText.FontSize(13);
+		emptyText.FontWeight(winrt::Windows::UI::Text::FontWeights::SemiBold());
+		emptyText.Margin({ 0, 8, 0, 2 });
 		emptyText.HorizontalAlignment(HorizontalAlignment::Center);
-		targetPanel.Children().Append(emptyText);
+		emptyPanel.Children().Append(emptyText);
+
+		TextBlock emptySubtext;
+		emptySubtext.Text(_(L"Pair your phone in Windows Settings first"));
+		emptySubtext.FontSize(11);
+		emptySubtext.Opacity(0.6);
+		emptySubtext.HorizontalAlignment(HorizontalAlignment::Center);
+		emptyPanel.Children().Append(emptySubtext);
+
+		Button pairBtn;
+		pairBtn.Content(winrt::box_value(_(L"＋ Pair New Device")));
+		pairBtn.FontSize(11);
+		pairBtn.HorizontalAlignment(HorizontalAlignment::Center);
+		pairBtn.Margin({ 0, 10, 0, 0 });
+		pairBtn.Click([](const auto&, const auto&) {
+			winrt::Windows::System::Launcher::LaunchUriAsync(Uri(L"ms-settings:bluetooth"));
+		});
+		emptyPanel.Children().Append(pairBtn);
+
+		targetPanel.Children().Append(emptyPanel);
 		UpdateHeaderBadgeUI();
 		return;
 	}
@@ -740,8 +973,39 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 		nameText.FontSize(13);
 		nameText.FontWeight(winrt::Windows::UI::Text::FontWeights::SemiBold());
 		nameText.TextTrimming(TextTrimming::CharacterEllipsis);
-		nameText.MaxWidth(160);
+		nameText.MaxWidth(140);
 		titleRow.Children().Append(nameText);
+
+		std::wstring codec = GetDeviceCodecName(dev);
+		if (!codec.empty())
+		{
+			Border codecBadge;
+			codecBadge.CornerRadius(CornerRadius{ 3, 3, 3, 3 });
+			codecBadge.Padding({ 4, 1, 4, 1 });
+			codecBadge.Margin({ 5, 0, 0, 0 });
+			codecBadge.VerticalAlignment(VerticalAlignment::Center);
+			if (codec == L"AAC")
+			{
+				codecBadge.Background(SolidColorBrush(winrt::Windows::UI::Color{ 0x30, 0x00, 0x78, 0xD4 }));
+				TextBlock codecText;
+				codecText.Text(L"AAC");
+				codecText.FontSize(9.5);
+				codecText.FontWeight(winrt::Windows::UI::Text::FontWeights::Bold());
+				codecText.Foreground(SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0x60, 0xB0, 0xFF }));
+				codecBadge.Child(codecText);
+			}
+			else
+			{
+				codecBadge.Background(SolidColorBrush(winrt::Windows::UI::Color{ 0x25, 0x80, 0x80, 0x80 }));
+				TextBlock codecText;
+				codecText.Text(codec);
+				codecText.FontSize(9.5);
+				codecText.FontWeight(winrt::Windows::UI::Text::FontWeights::Medium());
+				codecText.Foreground(SolidColorBrush(winrt::Windows::UI::Color{ 0xCC, 0xFF, 0xFF, 0xFF }));
+				codecBadge.Child(codecText);
+			}
+			titleRow.Children().Append(codecBadge);
+		}
 
 		if (batteryPct >= 0)
 		{
@@ -1110,6 +1374,23 @@ void ShowDevicePanel()
 
 static void HandleCliCommand(const std::wstring& cmdLine)
 {
+	if (cmdLine.find(L"/Status") != std::wstring::npos || cmdLine.find(L"-status") != std::wstring::npos || cmdLine.find(L"/status") != std::wstring::npos || cmdLine.find(L"/json") != std::wstring::npos)
+	{
+		std::wstring json = GetStatusJsonString();
+		if (AttachConsole(ATTACH_PARENT_PROCESS) || AllocConsole())
+		{
+			HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
+			if (hStdOut && hStdOut != INVALID_HANDLE_VALUE)
+			{
+				std::string utf8 = Utf16ToUtf8(json + L"\r\n");
+				DWORD written = 0;
+				WriteFile(hStdOut, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr);
+			}
+			FreeConsole();
+		}
+		return;
+	}
+
 	if (cmdLine.empty() || cmdLine.find(L"/Show") != std::wstring::npos || cmdLine.find(L"/s") != std::wstring::npos)
 	{
 		ShowDevicePanel();
@@ -1164,10 +1445,29 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	HANDLE hMutex = CreateMutexW(nullptr, FALSE, L"Global\\AudioPlaybackConnector_Instance_Mutex");
 	if (GetLastError() == ERROR_ALREADY_EXISTS)
 	{
+		std::wstring cmd = (lpCmdLine && wcslen(lpCmdLine) > 0) ? lpCmdLine : L"/Show";
+		if (cmd.find(L"/Status") != std::wstring::npos || cmd.find(L"-status") != std::wstring::npos || cmd.find(L"/status") != std::wstring::npos || cmd.find(L"/json") != std::wstring::npos)
+		{
+			LoadSettings();
+			std::wstring json = GetStatusJsonString();
+			if (AttachConsole(ATTACH_PARENT_PROCESS) || AllocConsole())
+			{
+				HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
+				if (hStdOut && hStdOut != INVALID_HANDLE_VALUE)
+				{
+					std::string utf8 = Utf16ToUtf8(json + L"\r\n");
+					DWORD written = 0;
+					WriteFile(hStdOut, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr);
+				}
+				FreeConsole();
+			}
+			if (hMutex) CloseHandle(hMutex);
+			ExitProcess(0);
+		}
+
 		HWND hExisting = FindWindowW(L"AudioPlaybackConnector", nullptr);
 		if (hExisting)
 		{
-			std::wstring cmd = (lpCmdLine && wcslen(lpCmdLine) > 0) ? lpCmdLine : L"/Show";
 			COPYDATASTRUCT cds = {
 				.dwData = 1,
 				.cbData = static_cast<DWORD>((cmd.length() + 1) * sizeof(wchar_t)),
@@ -1228,6 +1528,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	desktopSource.Content(g_xamlCanvas);
 
 	SetupAudioEndpointListener(g_hWnd);
+	SetupSmtc(g_hWnd);
 
 	LoadSettings();
 	SetupDeviceWatcher(g_autoConnectNearby);
@@ -1486,6 +1787,16 @@ void SetupMenu()
 	});
 	settingsSubMenu.Items().Append(mediaKeyItem);
 
+	// 6. Connection notifications
+	ToggleMenuFlyoutItem notificationItem;
+	notificationItem.Text(_(L"Show connection notifications"));
+	notificationItem.IsChecked(g_enableConnectionNotifications);
+	notificationItem.Click([](const auto& sender, const auto&) {
+		g_enableConnectionNotifications = sender.as<ToggleMenuFlyoutItem>().IsChecked();
+		SaveSettings();
+	});
+	settingsSubMenu.Items().Append(notificationItem);
+
 	// Separator
 	MenuFlyoutSeparator subSeparator;
 	settingsSubMenu.Items().Append(subSeparator);
@@ -1523,6 +1834,15 @@ void SetupMenu()
 	});
 	settingsSubMenu.Items().Append(multiDeviceItem);
 
+	// Check for updates
+	FontIcon updateIcon = CreateFontIcon(L"\uE895");
+	MenuFlyoutItem updateItem;
+	updateItem.Text(_(L"Check for Updates"));
+	updateItem.Icon(updateIcon);
+	updateItem.Click([](const auto&, const auto&) {
+		CheckForUpdatesAsync(true);
+	});
+
 	// Main Separator
 	MenuFlyoutSeparator mainSeparator;
 
@@ -1541,6 +1861,7 @@ void SetupMenu()
 	menu.Items().Append(soundItem);
 	menu.Items().Append(btItem);
 	menu.Items().Append(settingsSubMenu);
+	menu.Items().Append(updateItem);
 	menu.Items().Append(mainSeparator);
 	menu.Items().Append(exitItem);
 
@@ -1611,8 +1932,14 @@ winrt::fire_and_forget ConnectDevice(DeviceInformation device)
 					auto it = g_audioPlaybackConnections.find(deviceId);
 					if (it != g_audioPlaybackConnections.end())
 					{
+						std::wstring dName = it->second.name;
 						g_lostConnectionsInCurrentSession.insert(deviceId);
 						g_audioPlaybackConnections.erase(it);
+						if (g_enableConnectionNotifications)
+						{
+							ShowTrayNotification(_(L"Bluetooth Audio Disconnected"), dName);
+						}
+						UpdateSmtcState(!g_audioPlaybackConnections.empty(), g_isAudioPlaying);
 						UpdateTrayTooltip();
 						UpdateAudioThreadPriority(!g_audioPlaybackConnections.empty());
 						UpdatePowerLock(!g_audioPlaybackConnections.empty());
@@ -1668,6 +1995,12 @@ winrt::fire_and_forget ConnectDevice(DeviceInformation device)
 		UpdateTrayTooltip();
 		UpdateAudioThreadPriority(true);
 		UpdatePowerLock(true);
+
+		if (g_enableConnectionNotifications)
+		{
+			ShowTrayNotification(_(L"Bluetooth Audio Connected"), deviceName + L" " + _(L"is ready to stream audio"));
+		}
+		UpdateSmtcState(true, g_isAudioPlaying, deviceName);
 
 		// Restore saved volume level
 		float savedVol = GetDeviceVolume(deviceId);

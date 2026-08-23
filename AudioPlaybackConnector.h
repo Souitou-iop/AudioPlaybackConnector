@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "resource.h"
 
@@ -71,9 +71,14 @@ inline bool g_autoConnectNearby = false;
 inline bool g_preventSleepWhileStreaming = true;
 inline bool g_multiDeviceMode = false;
 inline bool g_enableMediaKeyForwarding = true;
+inline bool g_enableConnectionNotifications = true;
 inline bool g_isAudioPlaying = false;
 inline std::wstring g_preferredDeviceId;
 inline std::wstring g_currentDefaultAudioEndpointId;
+
+// SMTC
+inline winrt::Windows::Media::SystemMediaTransportControls g_smtc = nullptr;
+inline winrt::event_token g_smtcButtonToken;
 
 inline int GetMaxSupportedA2dpStreams()
 {
@@ -108,6 +113,13 @@ void SetDeviceVolume(std::wstring_view deviceId, float volume);
 float GetDeviceVolume(std::wstring_view deviceId);
 void CheckAudioMeter();
 void ExitApp();
+
+void SetupSmtc(HWND hWnd);
+void UpdateSmtcState(bool hasConnections, bool isPlaying, std::wstring_view deviceName = L"");
+void ShowTrayNotification(std::wstring_view title, std::wstring_view message);
+std::wstring GetDeviceCodecName(const DeviceInformation& dev);
+std::wstring GetStatusJsonString();
+winrt::fire_and_forget CheckForUpdatesAsync(bool manualTrigger);
 
 #include "Util.hpp"
 #include "I18n.hpp"

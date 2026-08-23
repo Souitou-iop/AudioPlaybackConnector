@@ -20,6 +20,9 @@
 #include <audiopolicy.h>
 #include <Functiondiscoverykeys_devpkey.h>
 
+// SMTC Interop
+#include <systemmediatransportcontrolsinterop.h>
+
 // C++ RunTime Header Files
 #include <cstdlib>
 #include <cstdint>
@@ -50,6 +53,7 @@
 #include <winrt/Windows.Devices.Enumeration.h>
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Foundation.Metadata.h>
+#include <winrt/Windows.Media.h>
 #include <winrt/Windows.Media.Audio.h>
 #include <winrt/Windows.System.h>
 #include <winrt/Windows.UI.h>
@@ -61,5 +65,7 @@
 #include <windows.ui.xaml.hosting.desktopwindowxamlsource.h>
 #include <winrt/Windows.UI.Xaml.Markup.h>
 #include <winrt/Windows.UI.Xaml.Media.h>
+#include <winrt/Windows.Web.Http.h>
+#include <winrt/Windows.Web.Http.Headers.h>
 
 #endif //PCH_H

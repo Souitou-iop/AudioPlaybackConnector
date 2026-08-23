@@ -132,3 +132,42 @@ msgstr "扫描蓝牙设备 / 刷新列表"
 
 msgid "Close"
 msgstr "关闭"
+
+msgid "Show connection notifications"
+msgstr "提示连接与断开通知"
+
+msgid "Bluetooth Audio Connected"
+msgstr "蓝牙音频已连接"
+
+msgid "Bluetooth Audio Disconnected"
+msgstr "蓝牙音频已断开"
+
+msgid "is ready to stream audio"
+msgstr "已准备好音频串流"
+
+msgid "No paired Bluetooth devices"
+msgstr "未发现已配对的蓝牙设备"
+
+msgid "Pair your phone in Windows Settings first"
+msgstr "请先在 Windows 设置中配对手机或设备"
+
+msgid "＋ Pair New Device"
+msgstr "＋ 配对新设备"
+
+msgid "Check for Updates"
+msgstr "检查更新"
+
+msgid "AudioPlaybackConnector Update"
+msgstr "AudioPlaybackConnector 检查更新"
+
+msgid "A new version is available:"
+msgstr "发现新版本:"
+
+msgid "Would you like to open GitHub to download it?"
+msgstr "是否前往 GitHub 下载最新版本？"
+
+msgid "You are using the latest version (v1.0 Beta)."
+msgstr "当前已是最新版本 (v1.0 Beta)。"
+
+msgid "Failed to check for updates. Please check your internet connection."
+msgstr "检查更新失败，请检查网络连接。"
