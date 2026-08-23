@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release Tag Name (e.g., v1.0-beta)'
+        description: 'Release Tag Name (e.g., v1.0-beta4)'
         required: false
         default: 'v1.0-beta3'
 
@@ -64,6 +64,27 @@ jobs:
           ARM64/Release/AudioPlaybackConnectorARM64.pdb
         if-no-files-found: ignore
 
+    - name: Extract Release Notes from CHANGELOG
+      id: extract_notes
+      run: |
+        python -c "
+        import re, os
+        tag = '${{ github.event.inputs.tag_name || github.ref_name }}'
+        notes = ''
+        if os.path.exists('CHANGELOG.md'):
+            with open('CHANGELOG.md', 'r', encoding='utf-8') as f:
+                content = f.read()
+            pattern = r'## \[' + re.escape(tag) + r'\][^\n]*\n(.*?)(?=\n## \[|\Z)'
+            match = re.search(pattern, content, re.DOTALL)
+            if match:
+                notes = match.group(1).strip()
+        if not notes:
+            notes = '### Release ' + tag + '\n\n- Standalone binaries for x64 and ARM64'
+        with open('RELEASE_NOTES.md', 'w', encoding='utf-8') as out:
+            out.write(notes)
+        "
+      shell: cmd
+
     - name: Publish GitHub Release
       uses: softprops/action-gh-release@v2
       env:
@@ -73,7 +94,7 @@ jobs:
         name: AudioPlaybackConnector ${{ github.event.inputs.tag_name || github.ref_name }}
         draft: false
         prerelease: false
-        generate_release_notes: true
+        body_path: RELEASE_NOTES.md
         files: |
           x64/Release/AudioPlaybackConnector64.exe
           ARM64/Release/AudioPlaybackConnectorARM64.exe
