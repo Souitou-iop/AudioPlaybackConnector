@@ -3,6 +3,9 @@ import sys
 import os
 import re
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
 tag = sys.argv[1] if len(sys.argv) > 1 else 'v1.0-beta4'
 notes = ''
 if os.path.exists('CHANGELOG.md'):
@@ -19,5 +22,4 @@ if not notes:
 with open('RELEASE_NOTES.md', 'w', encoding='utf-8') as out:
     out.write(notes)
 
-print(f'Extracted release notes for {tag}:')
-print(notes)
+print(f'Extracted release notes for {tag} successfully.')
