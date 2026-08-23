@@ -37,13 +37,12 @@ void ApplyTheme()
 	{
 		g_xamlCanvas.RequestedTheme(theme);
 	}
-	if (g_deviceFlyout)
+	if (g_deviceFlyout && g_deviceFlyout.Content())
 	{
-		try { g_deviceFlyout.RequestedTheme(theme); } catch (...) {}
-	}
-	if (g_xamlMenu)
-	{
-		try { g_xamlMenu.RequestedTheme(theme); } catch (...) {}
+		if (auto fe = g_deviceFlyout.Content().try_as<FrameworkElement>())
+		{
+			fe.RequestedTheme(theme);
+		}
 	}
 
 	UpdateNotifyIcon();
@@ -1371,8 +1370,8 @@ winrt::fire_and_forget RefreshDevicePanelAsync(bool forceReopen)
 
 		Flyout flyout;
 		auto curTheme = IsAppsLightMode() ? ElementTheme::Light : ElementTheme::Dark;
-		flyout.RequestedTheme(curTheme);
 		g_xamlCanvas.RequestedTheme(curTheme);
+		rootBorder.RequestedTheme(curTheme);
 		flyout.Content(rootBorder);
 		flyout.Placement(FlyoutPlacementMode::Top);
 		flyout.ShouldConstrainToRootBounds(false);
@@ -1930,7 +1929,6 @@ void SetupMenu()
 	});
 
 	MenuFlyout menu;
-	menu.RequestedTheme(IsAppsLightMode() ? ElementTheme::Light : ElementTheme::Dark);
 	menu.Items().Append(refreshItem);
 	menu.Items().Append(soundItem);
 	menu.Items().Append(btItem);
