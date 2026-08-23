@@ -5,9 +5,7 @@
 using namespace winrt::Windows::Data::Json;
 using namespace winrt::Windows::Devices::Enumeration;
 using namespace winrt::Windows::Foundation;
-using namespace winrt::Windows::Media;
 using namespace winrt::Windows::Media::Audio;
-using namespace winrt::Windows::Media::Control;
 using namespace winrt::Windows::UI::Xaml;
 using namespace winrt::Windows::UI::Xaml::Controls;
 using namespace winrt::Windows::UI::Xaml::Controls::Primitives;
@@ -41,16 +39,6 @@ constexpr WPARAM CLI_CMD_TOGGLE = 4;
 constexpr WPARAM CLI_CMD_EXIT = 5;
 
 constexpr UINT_PTR IDT_AUDIO_METER = 1001;
-
-enum class MediaAction
-{
-	TogglePlayPause,
-	Play,
-	Pause,
-	NextTrack,
-	PreviousTrack,
-	Stop
-};
 
 struct ConnectedDeviceInfo
 {
@@ -93,17 +81,11 @@ inline bool g_runAtStartup = false;
 inline bool g_autoConnectNearby = false;
 inline bool g_preventSleepWhileStreaming = true;
 inline bool g_multiDeviceMode = false;
-inline bool g_enableMediaKeyForwarding = true;
 inline bool g_enableConnectionNotifications = true;
 inline bool g_isAudioPlaying = false;
-inline std::atomic<bool> g_isForwardingMediaKey{ false };
 inline std::wstring g_language = L"auto";
 inline std::wstring g_preferredDeviceId;
 inline std::wstring g_currentDefaultAudioEndpointId;
-
-// SMTC
-inline winrt::Windows::Media::SystemMediaTransportControls g_smtc = nullptr;
-inline winrt::event_token g_smtcButtonToken;
 
 inline int GetMaxSupportedA2dpStreams()
 {
@@ -163,11 +145,6 @@ void ExitApp();
 void SetLanguage(std::wstring_view langCode);
 
 int GetBatteryPercentFromDevice(const DeviceInformation& dev);
-void SetupSmtc(HWND hWnd);
-void UpdateSmtcState(bool hasConnections, bool isPlaying, std::wstring_view deviceName = L"");
-void SendAdbMediaCommand(MediaAction action);
-winrt::fire_and_forget ExecuteMediaCommandAsync(MediaAction action);
-void ExecuteMediaCommand(MediaAction action);
 void ShowTrayNotification(std::wstring_view title, std::wstring_view message);
 std::wstring GetDeviceCodecName(const DeviceInformation& dev);
 std::wstring GetStatusJsonString();

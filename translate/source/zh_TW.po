@@ -118,9 +118,6 @@ msgstr "設為偏好裝置"
 msgid "Unset as Preferred Device"
 msgstr "取消偏好裝置"
 
-msgid "Enable media key forwarding"
-msgstr "允許鍵盤多媒體鍵控制播放"
-
 msgid "Battery"
 msgstr "電量"
 

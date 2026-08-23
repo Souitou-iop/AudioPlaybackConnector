@@ -46,7 +46,6 @@ inline void DefaultSettings()
 	g_autoConnectNearby = false;
 	g_preventSleepWhileStreaming = true;
 	g_multiDeviceMode = false;
-	g_enableMediaKeyForwarding = true;
 	g_enableConnectionNotifications = true;
 	g_language = L"auto";
 	g_preferredDeviceId.clear();
@@ -97,9 +96,6 @@ inline void LoadSettings()
 		if (jsonObj.HasKey(L"multiDeviceMode"))
 			g_multiDeviceMode = jsonObj.Lookup(L"multiDeviceMode").GetBoolean();
 
-		if (jsonObj.HasKey(L"enableMediaKeyForwarding"))
-			g_enableMediaKeyForwarding = jsonObj.Lookup(L"enableMediaKeyForwarding").GetBoolean();
-
 		if (jsonObj.HasKey(L"enableConnectionNotifications"))
 			g_enableConnectionNotifications = jsonObj.Lookup(L"enableConnectionNotifications").GetBoolean();
 
@@ -147,7 +143,6 @@ inline void SaveSettings()
 		jsonObj.Insert(L"autoConnectNearby", JsonValue::CreateBooleanValue(g_autoConnectNearby));
 		jsonObj.Insert(L"preventSleepWhileStreaming", JsonValue::CreateBooleanValue(g_preventSleepWhileStreaming));
 		jsonObj.Insert(L"multiDeviceMode", JsonValue::CreateBooleanValue(g_multiDeviceMode));
-		jsonObj.Insert(L"enableMediaKeyForwarding", JsonValue::CreateBooleanValue(g_enableMediaKeyForwarding));
 		jsonObj.Insert(L"enableConnectionNotifications", JsonValue::CreateBooleanValue(g_enableConnectionNotifications));
 		jsonObj.Insert(L"language", JsonValue::CreateStringValue(g_language));
 

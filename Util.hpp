@@ -90,15 +90,3 @@ auto GetModuleFsPath(HMODULE hModule)
 	return fs::path(path);
 }
 
-inline void SendMediaKey(BYTE vkCode)
-{
-	INPUT inputs[2] = {};
-	inputs[0].type = INPUT_KEYBOARD;
-	inputs[0].ki.wVk = vkCode;
-
-	inputs[1].type = INPUT_KEYBOARD;
-	inputs[1].ki.wVk = vkCode;
-	inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
-
-	SendInput(2, inputs, sizeof(INPUT));
-}

@@ -22,7 +22,7 @@
 
 **AudioPlaybackConnector** 能够将你的 Windows 10 / 11 电脑变成一台高性能的蓝牙音频接收器（A2DP Sink）。你可以将**手机、平板、其他笔记本电脑**上的音乐、播客、游戏音效或语音通知，实时串流至电脑的扬声器或耳机中播放。
 
-虽然微软从 Windows 10 (2004+) 开始内置了蓝牙 A2DP Sink 底层支持，但系统自身缺少完善的管理界面。本项目是基于原作者 [ysc3839/AudioPlaybackConnector](https://github.com/ysc3839/AudioPlaybackConnector) 的**全面现代化重构增强版本 (Modernized Fork)**，带来了多设备并发连接、Windows 10/11 SMTC 系统媒体控制联动、AAC/SBC 编码识别与电量徽章、全动态深浅主题实时跟随、多语言热重载无缝切换以及丰富的 CLI 自动化控制等核心能力。
+虽然微软从 Windows 10 (2004+) 开始内置了蓝牙 A2DP Sink 底层支持，但系统自身缺少完善的管理界面。本项目是基于原作者 [ysc3839/AudioPlaybackConnector](https://github.com/ysc3839/AudioPlaybackConnector) 的**全面现代化重构增强版本 (Modernized Fork)**，带来了多设备并发连接、AAC/SBC 编码识别与电量徽章、全动态深浅主题实时跟随、多语言热重载无缝切换以及丰富的 CLI 自动化控制等核心能力。
 
 ---
 

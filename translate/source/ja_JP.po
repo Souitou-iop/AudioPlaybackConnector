@@ -95,9 +95,6 @@ msgstr "再生中のスリープを防止"
 msgid "Multi-device concurrent mode"
 msgstr "マルチデバイス同時接続モード"
 
-msgid "Enable media key forwarding"
-msgstr "キーボードメディアキー転送を有効化"
-
 msgid "Show connection notifications"
 msgstr "接続・切断通知を表示"
 

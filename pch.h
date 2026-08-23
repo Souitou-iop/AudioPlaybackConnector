@@ -20,8 +20,6 @@
 #include <audiopolicy.h>
 #include <Functiondiscoverykeys_devpkey.h>
 
-// SMTC Interop
-#include <systemmediatransportcontrolsinterop.h>
 
 // C++ RunTime Header Files
 #include <cstdlib>
@@ -55,7 +53,6 @@
 #include <winrt/Windows.Foundation.Metadata.h>
 #include <winrt/Windows.Media.h>
 #include <winrt/Windows.Media.Audio.h>
-#include <winrt/Windows.Media.Control.h>
 #include <winrt/Windows.System.h>
 #include <winrt/Windows.UI.h>
 #include <winrt/Windows.UI.Core.h>

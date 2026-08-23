@@ -95,9 +95,6 @@ msgstr "스트리밍 중 절전 모드 방지"
 msgid "Multi-device concurrent mode"
 msgstr "다중 장치 동시 연결 모드"
 
-msgid "Enable media key forwarding"
-msgstr "키보드 미디어 키 전달 활성화"
-
 msgid "Show connection notifications"
 msgstr "연결 및 연결 끊김 알림 표시"
 

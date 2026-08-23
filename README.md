@@ -22,7 +22,7 @@
 
 **AudioPlaybackConnector** turns your Windows 10 / 11 PC into a high-performance Bluetooth audio receiver (A2DP Sink). Stream music, podcasts, game audio, or voice notifications from your **phone, tablet, or another laptop** straight to your computer's speakers or headphones.
 
-While Microsoft introduced Bluetooth A2DP Sink in Windows 10 (2004+), native management options are minimal. This project is a **heavily modernized, feature-packed fork** of the original [ysc3839/AudioPlaybackConnector](https://github.com/ysc3839/AudioPlaybackConnector), bringing multi-device concurrent streaming, Windows 10/11 SMTC media control integration, Bluetooth Codec & battery badges, real-time light/dark theme adaptation, dynamic multi-language switching, and powerful CLI automation.
+While Microsoft introduced Bluetooth A2DP Sink in Windows 10 (2004+), native management options are minimal. This project is a **heavily modernized, feature-packed fork** of the original [ysc3839/AudioPlaybackConnector](https://github.com/ysc3839/AudioPlaybackConnector), bringing multi-device concurrent streaming, Bluetooth Codec & battery badges, real-time light/dark theme adaptation, dynamic multi-language switching, and powerful CLI automation.
 
 ---
 
@@ -84,7 +84,6 @@ While Microsoft introduced Bluetooth A2DP Sink in Windows 10 (2004+), native man
 * **Auto-Reconnect Nearby Devices**: Automatically re-establishes connection when your devices come back into Bluetooth range.
 * **Run on Startup**: Easily toggles Windows startup registry integration.
 * **Prevent Sleep While Streaming**: Keeps your PC awake while audio is actively streaming.
-* **Bluetooth Absolute Volume Override**: Convenient toggle for disabling Windows AVRCP absolute volume conflicts.
 
 ---
 
