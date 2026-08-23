@@ -110,6 +110,28 @@ inline std::unordered_set<std::wstring> g_connectingDeviceIds;
 inline HANDLE g_mmcssHandle = nullptr;
 inline DeviceWatcher g_deviceWatcher = nullptr;
 
+
+inline bool IsAppsLightMode()
+{
+	DWORD value = 0, cbValue = sizeof(value);
+	if (RegGetValueW(HKEY_CURRENT_USER, LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)", L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr, &value, &cbValue) == ERROR_SUCCESS)
+	{
+		return value != 0;
+	}
+	return false;
+}
+
+inline bool IsSystemLightMode()
+{
+	DWORD value = 0, cbValue = sizeof(value);
+	if (RegGetValueW(HKEY_CURRENT_USER, LR"(Software\Microsoft\Windows\CurrentVersion\Themes\Personalize)", L"SystemUsesLightTheme", RRF_RT_REG_DWORD, nullptr, &value, &cbValue) == ERROR_SUCCESS)
+	{
+		return value != 0;
+	}
+	return false;
+}
+
+void ApplyTheme();
 void UpdateTrayTooltip();
 void ReopenAudioConnections();
 void DisconnectAllDevices();

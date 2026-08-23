@@ -27,6 +27,33 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 void SetDeviceVolume(std::wstring_view deviceId, float volume);
 float GetDeviceVolume(std::wstring_view deviceId);
 void CheckAudioMeter();
+
+void ApplyTheme()
+{
+	bool isLight = IsAppsLightMode();
+	auto theme = isLight ? ElementTheme::Light : ElementTheme::Dark;
+
+	if (g_xamlCanvas)
+	{
+		g_xamlCanvas.RequestedTheme(theme);
+	}
+	if (g_deviceFlyout)
+	{
+		try { g_deviceFlyout.RequestedTheme(theme); } catch (...) {}
+	}
+	if (g_xamlMenu)
+	{
+		try { g_xamlMenu.RequestedTheme(theme); } catch (...) {}
+	}
+
+	UpdateNotifyIcon();
+	UpdateHeaderBadgeUI();
+	if (g_deviceListPanel && g_cachedDevices)
+	{
+		PopulateDeviceList(g_deviceListPanel, g_cachedDevices);
+	}
+}
+
 void ExitApp();
 
 // System Media Transport Controls (SMTC) & Windows Integration
@@ -361,12 +388,13 @@ void CheckAudioMeter()
 		{
 			g_isAudioPlaying = false;
 			UpdateSmtcState(!g_audioPlaybackConnections.empty(), false);
+			bool isLight = IsAppsLightMode();
 			for (auto& pair : g_deviceStatusTextBlocks)
 			{
 				if (pair.second)
 				{
 					pair.second.Text(_(L"Connected"));
-					pair.second.Foreground(SolidColorBrush(winrt::Windows::UI::Color{ 0xB0, 0xFF, 0xFF, 0xFF }));
+					pair.second.Foreground(SolidColorBrush(isLight ? winrt::Windows::UI::Color{ 0x90, 0x00, 0x00, 0x00 } : winrt::Windows::UI::Color{ 0xB0, 0xFF, 0xFF, 0xFF }));
 				}
 			}
 		}
@@ -410,7 +438,8 @@ void CheckAudioMeter()
 				else
 				{
 					pair.second.Text(_(L"Connected"));
-					pair.second.Foreground(SolidColorBrush(winrt::Windows::UI::Color{ 0xB0, 0xFF, 0xFF, 0xFF }));
+					bool isLight = IsAppsLightMode();
+					pair.second.Foreground(SolidColorBrush(isLight ? winrt::Windows::UI::Color{ 0x90, 0x00, 0x00, 0x00 } : winrt::Windows::UI::Color{ 0xB0, 0xFF, 0xFF, 0xFF }));
 				}
 			}
 		}
@@ -751,8 +780,16 @@ void UpdateHeaderBadgeUI()
 	else
 	{
 		swprintf_s(badgeBuf, L"[%zu/%d]", curConn, maxCap);
-		g_panelBadgeText.Foreground(SolidColorBrush(winrt::Windows::UI::Color{ 0xDD, 0xFF, 0xFF, 0xFF }));
-		g_panelBadgeText.Opacity(0.65);
+		bool isLight = IsAppsLightMode();
+		if (isLight)
+		{
+			g_panelBadgeText.Foreground(SolidColorBrush(winrt::Windows::UI::Color{ 0xB0, 0x00, 0x00, 0x00 }));
+		}
+		else
+		{
+			g_panelBadgeText.Foreground(SolidColorBrush(winrt::Windows::UI::Color{ 0xAA, 0xFF, 0xFF, 0xFF }));
+		}
+		g_panelBadgeText.Opacity(1.0);
 	}
 	g_panelBadgeText.Text(badgeBuf);
 
@@ -920,6 +957,7 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 		starBtn.HorizontalAlignment(HorizontalAlignment::Center);
 		starBtn.VerticalAlignment(VerticalAlignment::Center);
 
+		bool isLight = IsAppsLightMode();
 		FontIcon starIcon = CreateFontIcon(isPreferred ? L"\uE735" : L"\uE734", 13);
 		if (isPreferred)
 		{
@@ -928,7 +966,7 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 		}
 		else
 		{
-			starIcon.Foreground(SolidColorBrush(winrt::Windows::UI::Color{ 0xFF, 0xFF, 0xFF, 0xFF }));
+			starIcon.Foreground(SolidColorBrush(isLight ? winrt::Windows::UI::Color{ 0xFF, 0x00, 0x00, 0x00 } : winrt::Windows::UI::Color{ 0xFF, 0xFF, 0xFF, 0xFF }));
 			starIcon.Opacity(0.35);
 		}
 		starBtn.Content(starIcon);
@@ -1055,7 +1093,8 @@ void PopulateDeviceList(StackPanel targetPanel, const winrt::Windows::Foundation
 			else
 			{
 				statusText.Text(_(L"Connected"));
-				statusText.Opacity(0.7);
+				statusText.Foreground(SolidColorBrush(isLight ? winrt::Windows::UI::Color{ 0x90, 0x00, 0x00, 0x00 } : winrt::Windows::UI::Color{ 0xB0, 0xFF, 0xFF, 0xFF }));
+				statusText.Opacity(0.85);
 			}
 			statusText.FontSize(11);
 			g_deviceStatusTextBlocks[devId] = statusText;
@@ -1331,6 +1370,9 @@ winrt::fire_and_forget RefreshDevicePanelAsync(bool forceReopen)
 		rootBorder.Child(rootPanel);
 
 		Flyout flyout;
+		auto curTheme = IsAppsLightMode() ? ElementTheme::Light : ElementTheme::Dark;
+		flyout.RequestedTheme(curTheme);
+		g_xamlCanvas.RequestedTheme(curTheme);
 		flyout.Content(rootBorder);
 		flyout.Placement(FlyoutPlacementMode::Top);
 		flyout.ShouldConstrainToRootBounds(false);
@@ -1532,6 +1574,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	SetupDeviceWatcher(g_autoConnectNearby);
 	SetupMenu();
 	SetupSvgIcon();
+	ApplyTheme();
 
 	g_nid.hWnd = g_niid.hWnd = g_hWnd;
 	wcscpy_s(g_nid.szTip, _(L"AudioPlaybackConnector"));
@@ -1612,11 +1655,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}
 		break;
 	case WM_SETTINGCHANGE:
-		if (lParam && CompareStringOrdinal(reinterpret_cast<LPCWCH>(lParam), -1, L"ImmersiveColorSet", -1, TRUE) == CSTR_EQUAL)
-		{
-			UpdateNotifyIcon();
-		}
+	case WM_THEMECHANGED:
+	{
+		ApplyTheme();
 		break;
+	}
 	case WM_NOTIFYICON:
 		switch (LOWORD(lParam))
 		{
@@ -1887,6 +1930,7 @@ void SetupMenu()
 	});
 
 	MenuFlyout menu;
+	menu.RequestedTheme(IsAppsLightMode() ? ElementTheme::Light : ElementTheme::Dark);
 	menu.Items().Append(refreshItem);
 	menu.Items().Append(soundItem);
 	menu.Items().Append(btItem);
