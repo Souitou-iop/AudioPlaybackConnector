@@ -225,25 +225,6 @@ winrt::fire_and_forget CheckForUpdatesAsync(bool manualTrigger)
 	}
 }
 
-		else if (manualTrigger)
-		{
-			MessageBoxW(g_hWnd, _(L"Failed to check for updates. Please check your internet connection.").c_str(), _(L"Check for Updates").c_str(), MB_OK | MB_ICONWARNING | MB_TOPMOST);
-		}
-	}
-	catch (...)
-	{
-		if (manualTrigger)
-		{
-			MessageBoxW(g_hWnd, _(L"Failed to check for updates. Please check your internet connection.").c_str(), _(L"Check for Updates").c_str(), MB_OK | MB_ICONWARNING | MB_TOPMOST);
-		}
-	}
-}
-
-
-
-
-
-
 class AudioEndpointNotificationClient : public IMMNotificationClient
 {
 public:
