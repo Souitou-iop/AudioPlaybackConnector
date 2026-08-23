@@ -344,3 +344,6 @@ translate/generated
 .DS_Store
 */.DS_Store
 RELEASE_NOTES.md
+
+# Session handoff notes
+承接会话*.md
