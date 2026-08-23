@@ -171,3 +171,12 @@ msgstr "目前已是最新版本 (v1.0 Beta 2)。"
 
 msgid "Failed to check for updates. Please check your internet connection."
 msgstr "檢查更新失敗，請檢查網路連線。"
+
+msgid "Language"
+msgstr "語言 (Language)"
+
+msgid "System Default"
+msgstr "跟隨系統 (System Default)"
+
+msgid "You are using the latest version (v1.0 Beta 3)."
+msgstr "目前已是最新版本 (v1.0 Beta 3)。"

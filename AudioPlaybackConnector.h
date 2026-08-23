@@ -85,6 +85,7 @@ inline bool g_multiDeviceMode = false;
 inline bool g_enableMediaKeyForwarding = true;
 inline bool g_enableConnectionNotifications = true;
 inline bool g_isAudioPlaying = false;
+inline std::wstring g_language = L"auto";
 inline std::wstring g_preferredDeviceId;
 inline std::wstring g_currentDefaultAudioEndpointId;
 
@@ -125,6 +126,7 @@ void SetDeviceVolume(std::wstring_view deviceId, float volume);
 float GetDeviceVolume(std::wstring_view deviceId);
 void CheckAudioMeter();
 void ExitApp();
+void SetLanguage(std::wstring_view langCode);
 
 int GetBatteryPercentFromDevice(const DeviceInformation& dev);
 void SetupSmtc(HWND hWnd);

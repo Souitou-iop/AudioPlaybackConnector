@@ -1,0 +1,171 @@
+# AudioPlaybackConnector Korean Translation
+# Copyright (C) 2026 Richard Yu & Contributors
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: AudioPlaybackConnector\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: ko_KR\n"
+
+msgid "Unsupported Operating System"
+msgstr "지원되지 않는 운영 체제"
+
+msgid "AudioPlaybackConnector is not supported on this operating system version."
+msgstr "이 OS 버전에서는 AudioPlaybackConnector를 지원하지 않습니다."
+
+msgid "AudioPlaybackConnector"
+msgstr "AudioPlaybackConnector"
+
+msgid "Bluetooth Audio Devices"
+msgstr "Bluetooth 오디오 장치"
+
+msgid "No Bluetooth audio devices found."
+msgstr "Bluetooth 오디오 장치를 찾을 수 없습니다."
+
+msgid "No paired Bluetooth devices"
+msgstr "페어링된 Bluetooth 장치가 없습니다"
+
+msgid "Pair your phone in Windows Settings first"
+msgstr "먼저 Windows 설정에서 스마트폰을 페어링하세요"
+
+msgid "＋ Pair New Device"
+msgstr "＋ 새 장치 페어링"
+
+msgid "Connect"
+msgstr "연결"
+
+msgid "Disconnect"
+msgstr "연결 끊기"
+
+msgid "Disconnect all"
+msgstr "모두 연결 끊기"
+
+msgid "Mute"
+msgstr "음소거"
+
+msgid "Unmute"
+msgstr "음소거 해제"
+
+msgid "Volume"
+msgstr "볼륨"
+
+msgid "Refresh"
+msgstr "새로 고침"
+
+msgid "Full"
+msgstr "가득 참"
+
+msgid "Hardware limit reached (Max 2 devices). Please disconnect one first."
+msgstr "Bluetooth 하드웨어 한도에 도달했습니다 (최대 2대). 먼저 하나를 연결 해제하세요."
+
+msgid "Exit"
+msgstr "종료"
+
+msgid "Bluetooth Settings"
+msgstr "Bluetooth 설정"
+
+msgid "Sound Settings"
+msgstr "소리 설정"
+
+msgid "Refresh Audio Connection"
+msgstr "오디오 연결 새로 고침"
+
+msgid "Settings"
+msgstr "설정"
+
+msgid "Language"
+msgstr "언어 (Language)"
+
+msgid "System Default"
+msgstr "시스템 기본값 (System Default)"
+
+msgid "Reconnect on next start"
+msgstr "다음 시작 시 연결 복원"
+
+msgid "Run at Windows startup"
+msgstr "Windows 시작 시 자동 실행"
+
+msgid "Auto-connect nearby devices"
+msgstr "주변 장치 자동 연결"
+
+msgid "Prevent sleep while streaming"
+msgstr "스트리밍 중 절전 모드 방지"
+
+msgid "Multi-device concurrent mode"
+msgstr "다중 장치 동시 연결 모드"
+
+msgid "Enable media key forwarding"
+msgstr "키보드 미디어 키 전달 활성화"
+
+msgid "Show connection notifications"
+msgstr "연결 및 연결 끊김 알림 표시"
+
+msgid "Connecting"
+msgstr "연결 중..."
+
+msgid "Connected"
+msgstr "연결됨"
+
+msgid "Playing"
+msgstr "재생 중"
+
+msgid "The request timed out"
+msgstr "요청 시간이 초과되었습니다"
+
+msgid "The operation was denied by the system"
+msgstr "시스템에서 작업을 거부했습니다"
+
+msgid "Unknown error"
+msgstr "알 수 없는 오류"
+
+msgid "Audio output switched, reconnected"
+msgstr "오디오 출력이 전환되어 다시 연결되었습니다"
+
+msgid "Preferred Device"
+msgstr "기본 장치"
+
+msgid "Set as Preferred Device"
+msgstr "기본 장치로 설정"
+
+msgid "Unset as Preferred Device"
+msgstr "기본 장치 해제"
+
+msgid "Battery"
+msgstr "배터리"
+
+msgid "Refresh Audio Connection (Fix no sound)"
+msgstr "오디오 연결 다시 초기화 (무음 복구)"
+
+msgid "Scan Bluetooth devices / Refresh list"
+msgstr "Bluetooth 장치 다시 검색"
+
+msgid "Close"
+msgstr "닫기"
+
+msgid "Bluetooth Audio Connected"
+msgstr "Bluetooth 오디오 연결됨"
+
+msgid "Bluetooth Audio Disconnected"
+msgstr "Bluetooth 오디오 연결 끊김"
+
+msgid "is ready to stream audio"
+msgstr "오디오 스트리밍 준비 완료"
+
+msgid "Check for Updates"
+msgstr "업데이트 확인"
+
+msgid "AudioPlaybackConnector Update"
+msgstr "AudioPlaybackConnector 업데이트"
+
+msgid "A new version is available:"
+msgstr "새 버전을 사용할 수 있습니다:"
+
+msgid "Would you like to open GitHub to download it?"
+msgstr "GitHub를 열어 최신 버전을 다운로드하시겠습니까?"
+
+msgid "You are using the latest version (v1.0 Beta 3)."
+msgstr "최신 버전을 사용 중입니다 (v1.0 Beta 3)."
+
+msgid "Failed to check for updates. Please check your internet connection."
+msgstr "업데이트 확인에 실패했습니다. 인터넷 연결을 확인하세요."

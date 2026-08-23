@@ -1,0 +1,171 @@
+# AudioPlaybackConnector Japanese Translation
+# Copyright (C) 2026 Richard Yu & Contributors
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: AudioPlaybackConnector\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: ja_JP\n"
+
+msgid "Unsupported Operating System"
+msgstr "サポートされていないオペレーティング システム"
+
+msgid "AudioPlaybackConnector is not supported on this operating system version."
+msgstr "AudioPlaybackConnector はこの OS バージョンに対応していません。"
+
+msgid "AudioPlaybackConnector"
+msgstr "AudioPlaybackConnector"
+
+msgid "Bluetooth Audio Devices"
+msgstr "Bluetooth オーディオ機器"
+
+msgid "No Bluetooth audio devices found."
+msgstr "Bluetooth オーディオ機器が見つかりません。"
+
+msgid "No paired Bluetooth devices"
+msgstr "ペアリング済みの Bluetooth 機器がありません"
+
+msgid "Pair your phone in Windows Settings first"
+msgstr "Windows の設定でスマホや機器をペアリングしてください"
+
+msgid "＋ Pair New Device"
+msgstr "＋ 新しい機器をペアリング"
+
+msgid "Connect"
+msgstr "接続"
+
+msgid "Disconnect"
+msgstr "切断"
+
+msgid "Disconnect all"
+msgstr "すべて切断"
+
+msgid "Mute"
+msgstr "ミュート"
+
+msgid "Unmute"
+msgstr "ミュート解除"
+
+msgid "Volume"
+msgstr "音量"
+
+msgid "Refresh"
+msgstr "更新"
+
+msgid "Full"
+msgstr "満杯"
+
+msgid "Hardware limit reached (Max 2 devices). Please disconnect one first."
+msgstr "Bluetooth ハードウェア上限に達しました (最大2台)。1台切断してください。"
+
+msgid "Exit"
+msgstr "終了"
+
+msgid "Bluetooth Settings"
+msgstr "Bluetooth 設定"
+
+msgid "Sound Settings"
+msgstr "サウンド設定"
+
+msgid "Refresh Audio Connection"
+msgstr "オーディオ接続を更新"
+
+msgid "Settings"
+msgstr "設定"
+
+msgid "Language"
+msgstr "言語 (Language)"
+
+msgid "System Default"
+msgstr "システムに従う (System Default)"
+
+msgid "Reconnect on next start"
+msgstr "次回起動時に接続を復元"
+
+msgid "Run at Windows startup"
+msgstr "Windows 起動時に自動実行"
+
+msgid "Auto-connect nearby devices"
+msgstr "近くの既知機器に自動接続"
+
+msgid "Prevent sleep while streaming"
+msgstr "再生中のスリープを防止"
+
+msgid "Multi-device concurrent mode"
+msgstr "マルチデバイス同時接続モード"
+
+msgid "Enable media key forwarding"
+msgstr "キーボードメディアキー転送を有効化"
+
+msgid "Show connection notifications"
+msgstr "接続・切断通知を表示"
+
+msgid "Connecting"
+msgstr "接続中..."
+
+msgid "Connected"
+msgstr "接続済み"
+
+msgid "Playing"
+msgstr "再生中"
+
+msgid "The request timed out"
+msgstr "リクエストがタイムアウトしました"
+
+msgid "The operation was denied by the system"
+msgstr "システムによって操作が拒否されました"
+
+msgid "Unknown error"
+msgstr "不明なエラー"
+
+msgid "Audio output switched, reconnected"
+msgstr "音声出力先が変更されたため再接続しました"
+
+msgid "Preferred Device"
+msgstr "優先デバイス"
+
+msgid "Set as Preferred Device"
+msgstr "優先デバイスに設定"
+
+msgid "Unset as Preferred Device"
+msgstr "優先デバイスを解除"
+
+msgid "Battery"
+msgstr "バッテリー"
+
+msgid "Refresh Audio Connection (Fix no sound)"
+msgstr "音声接続を再初期化 (無音修復)"
+
+msgid "Scan Bluetooth devices / Refresh list"
+msgstr "Bluetooth 機器を再スキャン"
+
+msgid "Close"
+msgstr "閉じる"
+
+msgid "Bluetooth Audio Connected"
+msgstr "Bluetooth オーディオ接続完了"
+
+msgid "Bluetooth Audio Disconnected"
+msgstr "Bluetooth オーディオ切断"
+
+msgid "is ready to stream audio"
+msgstr "オーディオストリーミングの準備が整いました"
+
+msgid "Check for Updates"
+msgstr "アップデートを確認"
+
+msgid "AudioPlaybackConnector Update"
+msgstr "AudioPlaybackConnector アップデート"
+
+msgid "A new version is available:"
+msgstr "新しいバージョンが利用可能です:"
+
+msgid "Would you like to open GitHub to download it?"
+msgstr "GitHub を開いて最新バージョンをダウンロードしますか？"
+
+msgid "You are using the latest version (v1.0 Beta 3)."
+msgstr "最新バージョンを使用しています (v1.0 Beta 3)。"
+
+msgid "Failed to check for updates. Please check your internet connection."
+msgstr "アップデートの確認に失敗しました。ネットワーク接続を確認してください。"

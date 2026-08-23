@@ -146,6 +146,7 @@ std::wstring GetStatusJsonString()
 	root.Insert(L"multiDeviceMode", JsonValue::CreateBooleanValue(g_multiDeviceMode));
 	root.Insert(L"enableMediaKeyForwarding", JsonValue::CreateBooleanValue(g_enableMediaKeyForwarding));
 	root.Insert(L"enableConnectionNotifications", JsonValue::CreateBooleanValue(g_enableConnectionNotifications));
+	root.Insert(L"language", JsonValue::CreateStringValue(g_language));
 
 	if (!g_preferredDeviceId.empty())
 	{
@@ -713,6 +714,7 @@ winrt::fire_and_forget ConnectDeviceByNameOrId(std::wstring target)
 
 void ExitApp()
 {
+	UpdateSmtcState(false, false);
 	Shell_NotifyIconW(NIM_DELETE, &g_nid);
 	if (g_hWnd && IsWindow(g_hWnd))
 	{
@@ -720,6 +722,16 @@ void ExitApp()
 	}
 	SaveSettings();
 	ExitProcess(0);
+}
+
+void SetLanguage(std::wstring_view langCode)
+{
+	g_language = langCode;
+	SaveSettings();
+	LoadTranslateData(g_language);
+	SetupMenu();
+	UpdateTrayTooltip();
+	UpdateDevicePanelUI();
 }
 
 void UpdateHeaderBadgeUI()
@@ -1465,7 +1477,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	}
 
 	g_hInst = hInstance;
-	LoadTranslateData();
+	LoadSettings();
+	LoadTranslateData(g_language);
 
 	winrt::init_apartment();
 
@@ -1781,6 +1794,38 @@ void SetupMenu()
 		SaveSettings();
 	});
 	settingsSubMenu.Items().Append(notificationItem);
+
+	// 7. Language Submenu
+	FontIcon langIcon = CreateFontIcon(L"\uE774");
+	MenuFlyoutSubItem langSubMenu;
+	langSubMenu.Text(_(L"Language"));
+	langSubMenu.Icon(langIcon);
+
+	struct LangOption {
+		std::wstring code;
+		std::wstring label;
+	};
+
+	std::vector<LangOption> langOptions = {
+		{ L"auto", _(L"System Default") },
+		{ L"zh-CN", L"简体中文" },
+		{ L"zh-TW", L"繁體中文" },
+		{ L"en-US", L"English" },
+		{ L"ja-JP", L"日本語" },
+		{ L"ko-KR", L"한국어" }
+	};
+
+	for (const auto& opt : langOptions)
+	{
+		ToggleMenuFlyoutItem item;
+		item.Text(opt.label);
+		item.IsChecked(g_language == opt.code);
+		item.Click([code = opt.code](const auto&, const auto&) {
+			SetLanguage(code);
+		});
+		langSubMenu.Items().Append(item);
+	}
+	settingsSubMenu.Items().Append(langSubMenu);
 
 	// Separator
 	MenuFlyoutSeparator subSeparator;

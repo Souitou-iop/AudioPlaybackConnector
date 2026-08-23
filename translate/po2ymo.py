@@ -112,17 +112,19 @@ if __name__ == '__main__':
         gen_dir = os.path.join(script_dir, 'generated')
         os.makedirs(gen_dir, exist_ok=True)
         
-        zh_cn_po = os.path.join(source_dir, 'zh_CN.po')
-        zh_cn_ymo = os.path.join(gen_dir, 'zh_CN.ymo')
-        if os.path.exists(zh_cn_po):
-            po2ymo(zh_cn_po, zh_cn_ymo)
-            print(f"Generated {zh_cn_ymo}")
-            
-        zh_tw_po = os.path.join(source_dir, 'zh_TW.po')
-        zh_tw_ymo = os.path.join(gen_dir, 'zh_TW.ymo')
-        if os.path.exists(zh_tw_po):
-            po2ymo(zh_tw_po, zh_tw_ymo)
-            print(f"Generated {zh_tw_ymo}")
+        langs = [
+            ('zh_CN.po', 'zh_CN.ymo'),
+            ('zh_TW.po', 'zh_TW.ymo'),
+            ('ja_JP.po', 'ja_JP.ymo'),
+            ('ko_KR.po', 'ko_KR.ymo')
+        ]
+        
+        for po_file, ymo_file in langs:
+            po_path = os.path.join(source_dir, po_file)
+            ymo_path = os.path.join(gen_dir, ymo_file)
+            if os.path.exists(po_path):
+                po2ymo(po_path, ymo_path)
+                print(f"Generated {ymo_path}")
             
         rc_content = '''#include "../../targetver.h"
 #include "windows.h"
@@ -132,6 +134,12 @@ LANGUAGE LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED
 
 LANGUAGE LANG_CHINESE, SUBLANG_CHINESE_TRADITIONAL
 1 YMO "zh_TW.ymo"
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+1 YMO "ja_JP.ymo"
+
+LANGUAGE LANG_KOREAN, SUBLANG_DEFAULT
+1 YMO "ko_KR.ymo"
 '''
         rc_path = os.path.join(gen_dir, 'translate.rc')
         with open(rc_path, 'w', encoding='utf-16') as f:
