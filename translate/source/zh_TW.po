@@ -166,8 +166,8 @@ msgstr "發現新版本:"
 msgid "Would you like to open GitHub to download it?"
 msgstr "是否前往 GitHub 下載最新版本？"
 
-msgid "You are using the latest version (v1.0 Beta)."
-msgstr "目前已是最新版本 (v1.0 Beta)。"
+msgid "You are using the latest version (v1.0 Beta 2)."
+msgstr "目前已是最新版本 (v1.0 Beta 2)。"
 
 msgid "Failed to check for updates. Please check your internet connection."
 msgstr "檢查更新失敗，請檢查網路連線。"

@@ -166,7 +166,7 @@ msgstr ""
 msgid "Would you like to open GitHub to download it?"
 msgstr ""
 
-msgid "You are using the latest version (v1.0 Beta)."
+msgid "You are using the latest version (v1.0 Beta 2)."
 msgstr ""
 
 msgid "Failed to check for updates. Please check your internet connection."

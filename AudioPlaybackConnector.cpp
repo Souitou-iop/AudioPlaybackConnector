@@ -140,7 +140,7 @@ std::wstring GetStatusJsonString()
 {
 	JsonObject root;
 	root.Insert(L"status", JsonValue::CreateStringValue(L"running"));
-	root.Insert(L"version", JsonValue::CreateStringValue(L"1.0-beta"));
+	root.Insert(L"version", JsonValue::CreateStringValue(L"1.0-beta2"));
 	root.Insert(L"connectedCount", JsonValue::CreateNumberValue(static_cast<double>(g_audioPlaybackConnections.size())));
 	root.Insert(L"isAudioPlaying", JsonValue::CreateBooleanValue(g_isAudioPlaying));
 	root.Insert(L"multiDeviceMode", JsonValue::CreateBooleanValue(g_multiDeviceMode));
@@ -194,7 +194,7 @@ winrt::fire_and_forget CheckForUpdatesAsync(bool manualTrigger)
 				auto latestTag = std::wstring(jsonObj.Lookup(L"tag_name").GetString());
 				auto htmlUrl = jsonObj.HasKey(L"html_url") ? std::wstring(jsonObj.Lookup(L"html_url").GetString()) : L"https://github.com/Souitou-iop/AudioPlaybackConnector/releases/latest";
 
-				if (latestTag != L"v1.0-beta" && !latestTag.empty())
+				if (latestTag != L"v1.0-beta2" && !latestTag.empty())
 				{
 					std::wstring msg = std::wstring(_(L"A new version is available:")) + L" " + latestTag + L"\n" + std::wstring(_(L"Would you like to open GitHub to download it?"));
 					int ret = MessageBoxW(g_hWnd, msg.c_str(), _(L"AudioPlaybackConnector Update"), MB_YESNO | MB_ICONINFORMATION | MB_TOPMOST);
@@ -206,7 +206,7 @@ winrt::fire_and_forget CheckForUpdatesAsync(bool manualTrigger)
 				}
 				else if (manualTrigger)
 				{
-					MessageBoxW(g_hWnd, _(L"You are using the latest version (v1.0 Beta)."), _(L"Check for Updates"), MB_OK | MB_ICONINFORMATION | MB_TOPMOST);
+					MessageBoxW(g_hWnd, _(L"You are using the latest version (v1.0 Beta 2)."), _(L"Check for Updates"), MB_OK | MB_ICONINFORMATION | MB_TOPMOST);
 					co_return;
 				}
 			}
