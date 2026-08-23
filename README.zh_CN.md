@@ -22,7 +22,7 @@
 
 **AudioPlaybackConnector** 能够将你的 Windows 10 / 11 电脑变成一台高性能的蓝牙音频接收器（A2DP Sink）。你可以将**手机、平板、其他笔记本电脑**上的音乐、播客、游戏音效或语音通知，实时串流至电脑的扬声器或耳机中播放。
 
-虽然微软从 Windows 10 (2004+) 开始内置了蓝牙 A2DP Sink 底层支持，但系统自身缺少完善的管理界面。本项目是基于原作者 [ysc3839/AudioPlaybackConnector](https://github.com/ysc3839/AudioPlaybackConnector) 的**全面现代化重构增强版本 (Modernized Fork)**，带来了多设备并发连接、每设备独立音量滑块、Windows 10/11 SMTC 系统媒体控制联动、AAC/SBC 编码识别与电量徽章、全动态深浅主题实时跟随、多语言热重载无缝切换以及丰富的 CLI 自动化控制等核心能力。
+虽然微软从 Windows 10 (2004+) 开始内置了蓝牙 A2DP Sink 底层支持，但系统自身缺少完善的管理界面。本项目是基于原作者 [ysc3839/AudioPlaybackConnector](https://github.com/ysc3839/AudioPlaybackConnector) 的**全面现代化重构增强版本 (Modernized Fork)**，带来了多设备并发连接、Windows 10/11 SMTC 系统媒体控制联动、AAC/SBC 编码识别与电量徽章、全动态深浅主题实时跟随、多语言热重载无缝切换以及丰富的 CLI 自动化控制等核心能力。
 
 ---
 
@@ -53,11 +53,10 @@
 
 ### 🎧 音频与多设备协同
 * **多设备并发连接与串流**：支持多台蓝牙设备同时连接电脑并同时发声（例如：平板看网课视频 + 手机接收微信语音消息），标题栏清晰展示容量状态（`[0/2]`、`[1/2]`、`[2/2]`）。
-* **每设备独立音量调节**：为每台连接的设备提供专属音量滑块，精细平衡不同设备响度，且完全不影响 Windows 系统的全局总音量。
 * **智能音频通道自动重路由**：基于 CoreAudio（`IMMNotificationClient`）实时监听默认输出声卡切换（如插拔耳机、切换音箱），秒级静默重定向，彻底告别“重连无声”问题。
 
 ### ⏯️ 深度系统整合与控制
-* **Windows 10/11 SMTC 媒体控制联动**：深度接入系统媒体传输中心（`SystemMediaTransportControls`），锁屏界面、音量悬浮窗同步显示当前蓝牙设备名称与播放状态。
+* **Windows 10/11 SMTC 媒体控制联动**：深度接入系统媒体传输中心（`SystemMediaTransportControls`），锁屏界面、系统媒体悬浮窗同步显示当前蓝牙设备名称与播放状态。
 * **键盘多媒体按键双向转发**：支持使用键盘物理多媒体按键（播放/暂停、上一曲、下一曲）反向控制手机/平板端的音乐播放。
 * **硬件编码格式与电量徽章**：实时检测并高亮显示当前蓝牙连接的音频 Codec（高清 **AAC** 或标准 **SBC**），并实时显示设备剩余电量百分比（如 `🔋 85%`）。
 * **⭐️ 星标首选常用设备**：一键置顶星标常用设备，快捷指令与双击快连绝对优先。
@@ -79,7 +78,7 @@
 
 ### ⚡️ 命令行扩展与自动化
 * **丰富的 CLI 命令行参数**：支持通过 `/Status`、`/Toggle`、`/Connect`、`/Disconnect`、`/Show`、`/Exit` 实现快捷指令、Stream Deck 或 AutoHotkey 脚本联动。
-* **毫秒级 JSON 状态输出**：执行 `AudioPlaybackConnector64.exe /Status` 即刻向终端输出包含连接状态、设备列表、电量、编码与音量的标准 JSON 数据。
+* **毫秒级 JSON 状态输出**：执行 `AudioPlaybackConnector64.exe /Status` 即刻向终端输出包含连接状态、设备列表、电量与编码的标准 JSON 数据。
 
 ### 🛡️ 系统守护与电源选项
 * **自动连接附近设备**：设备进入蓝牙信号范围时自动发起重连。
@@ -132,7 +131,6 @@
       "isPlaying": true,
       "codec": "AAC",
       "battery": 85,
-      "volume": 0.90,
       "isStarred": true
     }
   ]
@@ -156,10 +154,7 @@
   "language": "auto",
   "starredDevices": [
     "Bluetooth#Bluetooth..."
-  ],
-  "deviceVolumes": {
-    "Bluetooth#Bluetooth...": 0.85
-  }
+  ]
 }
 ```
 

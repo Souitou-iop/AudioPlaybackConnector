@@ -22,7 +22,7 @@
 
 **AudioPlaybackConnector** turns your Windows 10 / 11 PC into a high-performance Bluetooth audio receiver (A2DP Sink). Stream music, podcasts, game audio, or voice notifications from your **phone, tablet, or another laptop** straight to your computer's speakers or headphones.
 
-While Microsoft introduced Bluetooth A2DP Sink in Windows 10 (2004+), native management options are minimal. This project is a **heavily modernized, feature-packed fork** of the original [ysc3839/AudioPlaybackConnector](https://github.com/ysc3839/AudioPlaybackConnector), bringing multi-device concurrent streaming, per-device independent volume sliders, Windows 10/11 SMTC media control integration, Bluetooth Codec & battery badges, real-time light/dark theme adaptation, dynamic multi-language switching, and powerful CLI automation.
+While Microsoft introduced Bluetooth A2DP Sink in Windows 10 (2004+), native management options are minimal. This project is a **heavily modernized, feature-packed fork** of the original [ysc3839/AudioPlaybackConnector](https://github.com/ysc3839/AudioPlaybackConnector), bringing multi-device concurrent streaming, Windows 10/11 SMTC media control integration, Bluetooth Codec & battery badges, real-time light/dark theme adaptation, dynamic multi-language switching, and powerful CLI automation.
 
 ---
 
@@ -53,11 +53,10 @@ While Microsoft introduced Bluetooth A2DP Sink in Windows 10 (2004+), native man
 
 ### 🎧 Audio & Multi-Device
 * **Multi-Device Concurrent Streaming**: Connect multiple Bluetooth sources simultaneously (e.g. tablet playing video + phone receiving voice messages) with live capacity badges (`[0/2]`, `[1/2]`, `[2/2]`).
-* **Independent Per-Device Volume Sliders**: Smoothly control the playback volume of each connected device independently without altering your Windows master volume.
 * **Smart Audio Re-routing**: Automatically detects default output audio device changes (`IMMNotificationClient`) and rebinds active streams in real-time—eliminating silent stream bugs when plugging/unplugging headphones.
 
 ### ⏯️ System Integration & Controls
-* **Windows 10/11 SMTC Media Control**: Fully synced with Windows System Media Transport Controls (lock screen, volume flyouts, and taskbar). Displays device names and playing status.
+* **Windows 10/11 SMTC Media Control**: Fully synced with Windows System Media Transport Controls (lock screen, system media flyouts, and taskbar). Displays device names and playing status.
 * **Physical Media Key Relay**: Press keyboard Play/Pause, Next Track, and Previous Track to remotely control media playback on your phone or tablet.
 * **Hardware Codec & Battery Badges**: Real-time detection of high-quality **AAC** or standard **SBC** audio codecs, along with live Bluetooth battery level percentage (`🔋 85%`).
 * **⭐️ Star & Pin Preferred Devices**: Mark favorite devices with a single click to pin them to the top of the list for quick connection.
@@ -134,7 +133,6 @@ AudioPlaybackConnector supports rich command-line parameters for background cont
       "isPlaying": true,
       "codec": "AAC",
       "battery": 85,
-      "volume": 0.90,
       "isStarred": true
     }
   ]
@@ -158,10 +156,7 @@ The application automatically creates and manages `AudioPlaybackConnector.json` 
   "language": "auto",
   "starredDevices": [
     "Bluetooth#Bluetooth..."
-  ],
-  "deviceVolumes": {
-    "Bluetooth#Bluetooth...": 0.85
-  }
+  ]
 }
 ```
 
