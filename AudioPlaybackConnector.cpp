@@ -196,8 +196,8 @@ winrt::fire_and_forget CheckForUpdatesAsync(bool manualTrigger)
 
 				if (latestTag != L"v1.0-beta" && !latestTag.empty())
 				{
-					std::wstring msg = _(L"A new version is available:") + L" " + latestTag + L"\n" + _(L"Would you like to open GitHub to download it?");
-					int ret = MessageBoxW(g_hWnd, msg.c_str(), _(L"AudioPlaybackConnector Update").c_str(), MB_YESNO | MB_ICONINFORMATION | MB_TOPMOST);
+					std::wstring msg = std::wstring(_(L"A new version is available:")) + L" " + latestTag + L"\n" + std::wstring(_(L"Would you like to open GitHub to download it?"));
+					int ret = MessageBoxW(g_hWnd, msg.c_str(), _(L"AudioPlaybackConnector Update"), MB_YESNO | MB_ICONINFORMATION | MB_TOPMOST);
 					if (ret == IDYES)
 					{
 						ShellExecuteW(nullptr, L"open", htmlUrl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
@@ -206,11 +206,25 @@ winrt::fire_and_forget CheckForUpdatesAsync(bool manualTrigger)
 				}
 				else if (manualTrigger)
 				{
-					MessageBoxW(g_hWnd, _(L"You are using the latest version (v1.0 Beta).").c_str(), _(L"Check for Updates").c_str(), MB_OK | MB_ICONINFORMATION | MB_TOPMOST);
+					MessageBoxW(g_hWnd, _(L"You are using the latest version (v1.0 Beta)."), _(L"Check for Updates"), MB_OK | MB_ICONINFORMATION | MB_TOPMOST);
 					co_return;
 				}
 			}
 		}
+		else if (manualTrigger)
+		{
+			MessageBoxW(g_hWnd, _(L"Failed to check for updates. Please check your internet connection."), _(L"Check for Updates"), MB_OK | MB_ICONWARNING | MB_TOPMOST);
+		}
+	}
+	catch (...)
+	{
+		if (manualTrigger)
+		{
+			MessageBoxW(g_hWnd, _(L"Failed to check for updates. Please check your internet connection."), _(L"Check for Updates"), MB_OK | MB_ICONWARNING | MB_TOPMOST);
+		}
+	}
+}
+
 		else if (manualTrigger)
 		{
 			MessageBoxW(g_hWnd, _(L"Failed to check for updates. Please check your internet connection.").c_str(), _(L"Check for Updates").c_str(), MB_OK | MB_ICONWARNING | MB_TOPMOST);

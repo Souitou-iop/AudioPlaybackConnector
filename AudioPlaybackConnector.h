@@ -114,6 +114,7 @@ float GetDeviceVolume(std::wstring_view deviceId);
 void CheckAudioMeter();
 void ExitApp();
 
+int GetBatteryPercentFromDevice(const DeviceInformation& dev);
 void SetupSmtc(HWND hWnd);
 void UpdateSmtcState(bool hasConnections, bool isPlaying, std::wstring_view deviceName = L"");
 void ShowTrayNotification(std::wstring_view title, std::wstring_view message);
